@@ -1,0 +1,29 @@
+# R1: Exact IP match, specific ports, content with offset/depth
+alert tcp 192.168.1.100 any -> 10.0.0.50 80 (msg:"HTTP GET probe"; content:"GET /"; offset:0; depth:5; sid:1000001;)
+
+# R2: CIDR source, port range, simple content
+alert tcp 172.16.0.0/16 any -> any 443 (msg:"TLS suspicious payload"; content:"|16 03|"; offset:0; depth:2; sid:1000002;)
+
+# R3: IP list (EQOR), exact port
+alert tcp [10.0.0.1,10.0.0.2,10.0.0.5] any -> any 22 (msg:"SSH from known hosts"; content:"SSH-"; offset:0; depth:4; sid:1000003;)
+
+# R4: Negated source (NE), any destination
+alert tcp !192.168.1.0/24 any -> 192.168.1.0/24 80 (msg:"External HTTP access"; content:"Host:"; sid:1000004;)
+
+# R5: CIDR both sides, content match
+alert udp 10.0.0.0/8 any -> 172.16.0.0/12 53 (msg:"DNS query suspicious"; content:"|00 01 00 00|"; sid:1000005;)
+
+# R6: IP range, port range, content with offset/depth
+alert tcp 192.168.1.1-192.168.1.10 any -> any 8080:8090 (msg:"Proxy content match"; content:"CONNECT"; offset:0; depth:7; sid:1000006;)
+
+# R7: Exact IPs, ICMP protocol
+alert icmp 10.0.0.1 any -> 10.0.0.2 any (msg:"ICMP ping specific hosts"; content:"|08 00|"; offset:0; depth:2; sid:1000007;)
+
+# R8: IP list destination, TCP, content
+alert tcp any any -> [192.168.1.10,192.168.1.20,192.168.1.30] 443 (msg:"TLS to critical servers"; content:"|16 03 01|"; offset:0; depth:3; sid:1000008;)
+
+# R9: Negated port, CIDR, content with wider window
+alert tcp 10.10.0.0/16 any -> any !22 (msg:"Non-SSH suspicious payload"; content:"|FF FF FF FF|"; offset:0; depth:20; sid:1000009;)
+
+# R10: Range source, exact dest, content offset/depth with expansion
+alert tcp 192.168.1.1-192.168.1.10 80 -> 10.0.0.1 443 (msg:"Range test ABCD"; content:"ABCD"; offset:2; depth:8; sid:1000010;)

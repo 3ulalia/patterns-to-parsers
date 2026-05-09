@@ -1,0 +1,31 @@
+# Generated RTL outputs
+p4_out/
+synthetic_out/
+snort_out/
+
+# Engine temporaries
+engine/tmp/
+
+# Snort flow intermediates
+snort_frontend/snort_out.hex
+snort_frontend/snort_out_config.json
+snort_frontend/snort_out_msg_map.txt
+
+# Synthesis project directories and markers
+parser_rtl/rtl/*/vivado_proj/
+parser_rtl/rtl/*/quartus_proj/
+parser_rtl/rtl/*/.done
+
+# P4 compiler artifacts
+*.p4i
+engine/tmp/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
