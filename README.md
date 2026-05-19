@@ -95,7 +95,7 @@ Generates RTL from pre-computed synthetic hex tables (no p4c needed).
 make synthetic
 ```
 
-Output: `synthetic_out/{one_group,multi_group}_synthetic_u{256,512,1024}_uc{1,2,3,4}/`
+Output: `synthetic_out/{one_group,multi_group}_synthetic_u{256,512,1024}_ug{1,2,3,4}/`
 
 ### Flow 3 — Snort Rules → RTL
 
@@ -152,19 +152,11 @@ Table 1 in the paper reports LUT count, flip-flop count, and Fmax for:
 | Simple Parser | 256 b, 320 b | Unique, Tree |
 | Full Parser | 64 b, 320 b, 512 b | Unique, Tree |
 
-A single command runs all 10 configurations end-to-end (RTL generation → Vivado synthesis → CSV extraction):
-
 ```bash
-make table1
+make table1                      # full pipeline (Vivado)
 ```
 
-Or override the Vivado path if it is not on `PATH`:
-
-```bash
-make table1 VIVADO=/path/to/vivado
-```
-
-Individual steps can be run separately:
+Individual steps (optional):
 
 ```bash
 make table1-rtl      # generate RTL only (no Vivado needed)
@@ -176,16 +168,6 @@ Output:
 - `artifact_out/table1/{parser}_dw{width}_{mode}/` — generated RTL and Vivado project for each config
 - `table1_results.csv` — aggregated results matching Table 1
 
-The CSV is printed to the terminal after extraction:
-
-```
-Parser               DW   Config  Fmax(MHz)      LUT       FF
------------------------------------------------------------------
-Simple Parser       256   Unique        ...      ...      ...
-Simple Parser       256     Tree        ...      ...      ...
-...
-```
-
 ---
 
 ### Table 3
@@ -193,11 +175,10 @@ Simple Parser       256     Tree        ...      ...      ...
 Table 3 reports Fmax, LUT (Vivado), ALM (Quartus), and FF for the Snort 10-rule parser on both tools.
 
 ```bash
-make table3                                          # full pipeline (both tools)
-make table3 VIVADO=/path/to/vivado QUARTUS=/path/to/quartus_sh
+make table3                                          # full pipeline (both Vivado and Quartus)
 ```
 
-Individual steps:
+Individual steps (optional):
 
 ```bash
 make table3-rtl            # generate RTL (no tool needed)
@@ -218,19 +199,11 @@ The RTL is identical for both figures — only the synthesis tool changes:
 
 ```bash
 make fig-rtl   # generate RTL once (no synthesis tool needed)
-
 make fig6      # Quartus synthesis + extract → fig6_results.csv
 make fig7      # Vivado synthesis  + extract → fig7_results.csv
 ```
 
-Or with explicit tool paths:
-
-```bash
-make fig6 QUARTUS=/path/to/quartus_sh
-make fig7 VIVADO=/path/to/vivado
-```
-
-Individual steps:
+Individual steps (optional):
 
 ```bash
 make fig6-synth    # Quartus synthesis only
@@ -252,11 +225,10 @@ Figure 9 sweeps the synthetic benchmarks across two parser graph configurations 
 | Groups | ug1, ug2, ug3, ug4 |
 
 ```bash
-make fig9                        # full pipeline
-make fig9 VIVADO=/path/to/vivado
+make fig9          # full pipeline (Vivado)
 ```
 
-Individual steps:
+Individual steps (optional):
 
 ```bash
 make fig9-rtl      # generate RTL (no tool needed) → artifact_out/fig9/
