@@ -10,15 +10,19 @@
 # Validate arguments
 # ------------------------------------------------------------
 if { $argc < 2 } {
-    puts "Usage: vivado -mode batch -source run_vivado.tcl -tclargs <base_dir> <design_dir>"
+    puts "Usage: vivado -mode batch -source run_vivado.tcl -tclargs <base_dir> <design_dir> \[xdc_path\]"
     exit 1
 }
 
 set base_dir   [file normalize [lindex $argv 0]]
 set design_dir [file normalize [lindex $argv 1]]
 
-# vivado.xdc expected to be inside the base directory
-set xdc_file "$base_dir/../vivado.xdc"
+# xdc_path: optional 3rd argument; defaults to <base_dir>/../vivado.xdc
+if { $argc >= 3 } {
+    set xdc_file [file normalize [lindex $argv 2]]
+} else {
+    set xdc_file "$base_dir/../vivado.xdc"
+}
 
 if {![file exists $xdc_file]} {
     puts "Error: vivado.xdc not found at $xdc_file"
@@ -49,7 +53,14 @@ if {[llength $sv_files] == 0} {
 }
 
 add_files -norecurse $sv_files
-set_property top parser_top [current_fileset]
+
+# top-level entity: optional 4th argument, defaults to parser_top
+if { $argc >= 4 } {
+    set top_entity [lindex $argv 3]
+} else {
+    set top_entity "parser_top"
+}
+set_property top $top_entity [current_fileset]
 add_files -fileset constrs_1 $xdc_file
 
 # Optional synthesis settings

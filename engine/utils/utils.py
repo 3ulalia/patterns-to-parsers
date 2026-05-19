@@ -101,6 +101,8 @@ def get_p4_to_rtl_args():
     parser.add_argument("--mw", "--maxwidth", type=int, required=True, help="Max packet width to parse (bits); must be divisible by --dw")
     parser.add_argument("--cm", "--colmult", type=int, required=False, default=1, help="Column multiplier")
     parser.add_argument("--o", "--outdir", type=str, required=True, help='Output directory for generated RTL')
+    parser.add_argument("--mode", choices=["tree", "unique"], default="tree",
+                        help="Comparison/lookup implementation style: tree (nested if-else) or unique (parallel comparators)")
     parser.add_argument("--debug", action="store_true", help="Print debug info")
     return parser.parse_args()
 

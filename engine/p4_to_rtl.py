@@ -73,16 +73,17 @@ def run_step_2(args, mask_path, tmp_dir):
         print(f"  Config: {json.dumps(config_data, indent=2)}")
 
     try:
+        use_tree = (args.mode == "tree")
         build_rtl_countluts.build_rtl_countluts(
             cfgfilename=str(config_path),
             mask=str(mask_path),
             countluts=False,
             rtl=True,
-            tree1=True,
-            tree2=True,
+            tree1=use_tree,
+            tree2=use_tree,
             retime=False,
-            unique1=False,
-            unique2=False,
+            unique1=not use_tree,
+            unique2=not use_tree,
             outfile_dir=str(tmp_dir),
             debug=args.debug,
         )

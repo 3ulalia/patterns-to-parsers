@@ -127,6 +127,149 @@ make clean
 
 ---
 
+## Artifact Evaluation
+
+Each paper result is reproducible with a single `make` command. All commands follow the same pattern: RTL generation → synthesis → CSV extraction.
+
+| Artifact | Tool | Command | Output |
+|---|---|---|---|
+| Table 1 | Vivado | `make table1` | `table1_results.csv` |
+| Table 3 | Vivado + Quartus | `make table3` | `table3_results.csv` |
+| Figure 6 | Quartus | `make fig6` | `fig6_results.csv` |
+| Figure 7 | Vivado | `make fig7` | `fig7_results.csv` |
+| Figure 9 | Vivado | `make fig9` | `fig9_results.csv` |
+
+RTL generation steps can be run without a synthesis tool installed (`make table1-rtl`, `make table3-rtl`, `make fig-rtl`, `make fig9-rtl`). Figure 6 and Figure 7 share the same RTL (`artifact_out/fig/`) — only the synthesis tool differs.
+
+---
+
+### Table 1
+
+Table 1 in the paper reports LUT count, flip-flop count, and Fmax for:
+
+| Parser | Data Width | Config |
+|---|---|---|
+| Simple Parser | 256 b, 320 b | Unique, Tree |
+| Full Parser | 64 b, 320 b, 512 b | Unique, Tree |
+
+A single command runs all 10 configurations end-to-end (RTL generation → Vivado synthesis → CSV extraction):
+
+```bash
+make table1
+```
+
+Or override the Vivado path if it is not on `PATH`:
+
+```bash
+make table1 VIVADO=/path/to/vivado
+```
+
+Individual steps can be run separately:
+
+```bash
+make table1-rtl      # generate RTL only (no Vivado needed)
+make table1-synth    # run Vivado on all 10 configs
+make table1-extract  # parse reports → table1_results.csv
+```
+
+Output:
+- `artifact_out/table1/{parser}_dw{width}_{mode}/` — generated RTL and Vivado project for each config
+- `table1_results.csv` — aggregated results matching Table 1
+
+The CSV is printed to the terminal after extraction:
+
+```
+Parser               DW   Config  Fmax(MHz)      LUT       FF
+-----------------------------------------------------------------
+Simple Parser       256   Unique        ...      ...      ...
+Simple Parser       256     Tree        ...      ...      ...
+...
+```
+
+---
+
+### Table 3
+
+Table 3 reports Fmax, LUT (Vivado), ALM (Quartus), and FF for the Snort 10-rule parser on both tools.
+
+```bash
+make table3                                          # full pipeline (both tools)
+make table3 VIVADO=/path/to/vivado QUARTUS=/path/to/quartus_sh
+```
+
+Individual steps:
+
+```bash
+make table3-rtl            # generate RTL (no tool needed)
+make table3-synth-vivado   # Vivado synthesis
+make table3-synth-quartus  # Quartus synthesis
+make table3-extract        # parse both reports → table3_results.csv
+```
+
+Output: `artifact_out/table3/snort_10rule/` containing both `vivado_proj/` and `quartus_proj/`, and `table3_results.csv` with Vivado and Quartus results on separate rows.
+
+---
+
+### Figures 6 & 7
+
+Both figures sweep Simple and Full parser across all data widths (64, 128, 256, 320, 512 b) in the **unique** configuration. Figure 6 uses Quartus (Intel/Altera), Figure 7 uses Vivado (AMD/Xilinx).
+
+The RTL is identical for both figures — only the synthesis tool changes:
+
+```bash
+make fig-rtl   # generate RTL once (no synthesis tool needed)
+
+make fig6      # Quartus synthesis + extract → fig6_results.csv
+make fig7      # Vivado synthesis  + extract → fig7_results.csv
+```
+
+Or with explicit tool paths:
+
+```bash
+make fig6 QUARTUS=/path/to/quartus_sh
+make fig7 VIVADO=/path/to/vivado
+```
+
+Individual steps:
+
+```bash
+make fig6-synth    # Quartus synthesis only
+make fig6-extract  # parse Quartus reports → fig6_results.csv
+make fig7-synth    # Vivado synthesis only
+make fig7-extract  # parse Vivado reports  → fig7_results.csv
+```
+
+---
+
+### Figure 9
+
+Figure 9 sweeps the synthetic benchmarks across two parser graph configurations and four uniqueness group counts, using the **unique** implementation style (unique1 + unique2).
+
+| Dimension | Values |
+|---|---|
+| Config | flat (`one_group.json`), decomposed (`multi_group.json`) |
+| Width | 256, 512, 1024 bits |
+| Groups | ug1, ug2, ug3, ug4 |
+
+```bash
+make fig9                        # full pipeline
+make fig9 VIVADO=/path/to/vivado
+```
+
+Individual steps:
+
+```bash
+make fig9-rtl      # generate RTL (no tool needed) → artifact_out/fig9/
+make fig9-synth    # Vivado synthesis
+make fig9-extract  # parse reports → fig9_results.csv
+```
+
+Note: the synthetic hex files use the naming convention `synthetic_u{width}_ug{n}.hex` (ug = uniqueness group).
+
+> **Runtime:** `fig9-synth` runs Vivado on 24 configurations and takes approximately 6–7 hours to complete.
+
+---
+
 ## Synthesis (Optional)
 
 Requires Vivado or Quartus installed. Pass the directory containing RTL subdirectories to synthesize.
