@@ -127,6 +127,26 @@ make clean
 
 ---
 
+## Synthesis (Optional)
+
+Requires Vivado or Quartus installed. Pass the directory containing RTL subdirectories to synthesize.
+
+```bash
+# First generate RTL, then synthesize
+make p4_full
+
+# Vivado
+make synth TOOL=vivado DIR=p4_out/full_parser VIVADO=/path/to/vivado
+
+# Quartus
+make synth TOOL=quartus DIR=p4_out/full_parser QUARTUS=/path/to/quartus_sh
+
+# Extract resource utilization after synthesis
+make extract TOOL=vivado DIR=p4_out/full_parser
+```
+
+---
+
 ## Artifact Evaluation
 
 Each paper result is reproducible with a single `make` command. All commands follow the same pattern: RTL generation → synthesis → CSV extraction.
@@ -239,26 +259,6 @@ make fig9-extract  # parse reports → fig9_results.csv
 Note: the synthetic hex files use the naming convention `synthetic_u{width}_ug{n}.hex` (ug = uniqueness group).
 
 > **Runtime:** `fig9-synth` runs Vivado on 24 configurations and takes approximately 6–7 hours to complete.
-
----
-
-## Synthesis (Optional)
-
-Requires Vivado or Quartus installed. Pass the directory containing RTL subdirectories to synthesize.
-
-```bash
-# First generate RTL, then synthesize
-make p4_full
-
-# Vivado
-make synth TOOL=vivado DIR=p4_out/full_parser VIVADO=/path/to/vivado
-
-# Quartus
-make synth TOOL=quartus DIR=p4_out/full_parser QUARTUS=/path/to/quartus_sh
-
-# Extract resource utilization after synthesis
-make extract TOOL=vivado DIR=p4_out/full_parser
-```
 
 ---
 
