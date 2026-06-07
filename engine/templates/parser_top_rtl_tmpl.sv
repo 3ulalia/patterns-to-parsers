@@ -6,94 +6,115 @@
 module {{ module }} (
     input  logic    clk,
     input  logic    rst,
-    input  logic [{{ top_in_width - 1 }}:0] data_i,
-    input  logic    data_sop_i,
-    output logic    field_valid_o,
+    input  logic [{{ top_in_width - 1 }}:0] data_in,
+    input  logic    data_in_sop,
+    input  logic    data_in_eop,
+    input  logic    data_in_valid,
+    input  logic    field_ready_in,
+    output logic    data_in_ready,
+    output logic    field_valid_out,
     {% for field in fields -%}
-    output logic [{{ field.width - 1 }}:0] {{ field.name }}_o{% if not loop.last -%},{% endif %}
+    output logic [{{ field.width - 1 }}:0] {{ field.name }}_out{% if not loop.last -%},{% endif %}
     {% endfor -%}
 );
 
 logic [{{ path_id_width }}-1:0] path_id_hex_to_rtl_top;
-logic [{{ top_in_width - 1 }}:0] data_out_hex_to_rtl_top;
 logic hex_to_rtl_top_output_valid;
+logic field_valid_r;
 
 //Hex to rtl top instance
 hex_to_rtl_top
   u_comp_lookup (
     .clk              (clk),
     .rst              (rst),
-    .data_in          (data_i),
-    .data_in_sop      (data_sop_i),
+    .data_in          (data_in),
+    .data_in_sop      (data_in_sop),
+    .data_in_eop      (data_in_eop),
+    .data_in_valid    (data_in_valid),
+    .path_id_out_ready(field_ready_in),
     .path_id_out      (path_id_hex_to_rtl_top),
-    .data_out         (data_out_hex_to_rtl_top),
-    .data_out_valid   (hex_to_rtl_top_output_valid)
+    .path_id_out_valid(hex_to_rtl_top_output_valid),
+    .data_in_ready    (data_in_ready)
 );
 
-//Pipe and accumulate data before sending to extractor module
-{% if num_pipes > 1 %}
-// Pipeline Registers (Depth: num_pipes - 1)
-logic [{{ num_pipes - 2 }}:0][{{ top_in_width - 1 }}:0] r_data_pipe;
-logic [{{ num_pipes - 2 }}:0][{{ path_id_width - 1 }}:0] r_path_id_pipe;
-logic [{{ top_in_width * num_pipes }}-1:0] data_accum;
+// Flit-counter: resets to 0 on SOP, increments each valid cycle, saturates at num_pipes-1
+{%- if num_pipes > 1 %}
+logic [$clog2({{ num_pipes }})-1:0] flit_counter;
 
-always_ff @(posedge clk) begin
-    // Inject current data into pipeline
-    r_data_pipe[0]    <= data_out_hex_to_rtl_top;
-    r_path_id_pipe[0] <= path_id_hex_to_rtl_top;
-    
-    // Shift
-    for (int i = 1; i < {{ num_pipes - 1 }}; i++) begin
-        r_data_pipe[i]    <= r_data_pipe[i-1];
-        r_path_id_pipe[i] <= r_path_id_pipe[i-1];
-    end
-end
-
-// Concatenate current data with pipeline history
-assign data_accum = { {% for i in range(num_pipes - 2, -1, -1) %}r_data_pipe[{{i}}], {% endfor %}data_out_hex_to_rtl_top };
-{% endif %}
-
-// Valid Signal Pipeline (Depth: num_pipes)
-// Used to align valid signal with the final output flop
-logic [0:{{ num_pipes - 1 }}] r_valid_pipe;
-
-always_ff @(posedge clk) begin
+always_ff @(posedge clk or posedge rst) begin
     if (rst) begin
-        r_valid_pipe <= '0;
-    end else begin
-        r_valid_pipe[0] <= hex_to_rtl_top_output_valid;
-        for (int i = 1; i < {{ num_pipes }}; i++) begin
-            r_valid_pipe[i] <= r_valid_pipe[i-1];
-        end
+        flit_counter <= '0;
+    end else if (data_in_valid) begin
+        if (data_in_sop)
+            flit_counter <= '0;
+        else if (flit_counter < {{ num_pipes - 1 }})
+            flit_counter <= flit_counter + 1'b1;
     end
 end
+{%- endif %}
+
+// Per-flit latch registers — capture data_i for each flit as it arrives
+{%- for i in range(num_pipes) %}
+logic [{{ top_in_width - 1 }}:0] data_i_latched_{{ i }};
+{%- endfor %}
+
+{%- for i in range(num_pipes) %}
+{%- if i == 0 %}
+always_ff @(posedge clk) begin
+    if (data_in_valid && data_in_sop)
+        data_i_latched_0 <= data_in;
+end
+{%- else %}
+always_ff @(posedge clk) begin
+    if (data_in_valid && (flit_counter == {{ i - 1 }}))
+        data_i_latched_{{ i }} <= data_in;
+end
+{%- endif %}
+{%- endfor %}
+
+// Concatenate all latched flits and register once to align with path_id_out
+logic [{{ top_in_width * num_pipes }}-1:0] data_accum;
+logic [{{ top_in_width * num_pipes }}-1:0] data_accum_r;
+
+assign data_accum = {
+    {%- for i in range(num_pipes) %}
+    data_i_latched_{{ i }}{% if i < num_pipes - 1 %},{% endif %}
+    {%- endfor %}
+};
+
+always_ff @(posedge clk) begin
+    data_accum_r <= data_accum;
+end
+
+// field_valid_out is one cycle after path_id_out_valid to align with registered field outputs
+always_ff @(posedge clk or posedge rst) begin
+    if (rst)
+        field_valid_r <= '0;
+    else
+        field_valid_r <= hex_to_rtl_top_output_valid;
+end
+assign field_valid_out = field_valid_r;
+
+//Output declarations
+{% for field in fields %}
+logic [{{ field.width - 1 }}:0] {{ field.name }}_out_t;
+{%- endfor %}
+
 
 //Extractor module instance
-mask_extractor 
+mask_extractor
   u_mask_extractor (
-{%- if num_pipes > 1 %}
-    .data_in        (data_accum),
-    .path_id        (r_path_id_pipe[{{ num_pipes - 2 }}]),
-{%- else %}
-    .data_in        (data_out_hex_to_rtl_top),
+    .data_in        (data_accum_r),
     .path_id        (path_id_hex_to_rtl_top),
-{%- endif %}
 {%- for field in fields %}
-    .{{ field.name }}_out       ({{ field.name }}_o_t){% if not loop.last -%},{% endif %}
+    .{{ field.name }}_out       ({{ field.name }}_out_t){% if not loop.last -%},{% endif %}
 {%- endfor %}
 );
 
-//Output assignment
-{% for field in fields %}
-logic [{{ field.width - 1 }}:0] {{ field.name }}_o_t;
-{%- endfor %}
-
-always_ff @ (posedge clk) begin
+always_ff @(posedge clk) begin
 {%- for field in fields %}
-    {{ field.name }}_o <= {{ field.name }}_o_t;
+    {{ field.name }}_out <= {{ field.name }}_out_t;
 {%- endfor %}
 end
-
-assign field_valid_o = r_valid_pipe[{{ num_pipes - 1 }}];
 
 endmodule: {{ module }}

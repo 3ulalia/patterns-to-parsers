@@ -330,6 +330,106 @@ def resolve_col_per_file(col_per_file, num_cols):
         raise TypeError("col_per_file must be an int or a list of ints.")
 
 
+_HEX_DIGIT_REGEX = re.compile(r'[0-9A-Fa-f]')
+
+
+def find_constrained_runs(segment):
+    """Maximal contiguous non-'x' ("constrained") runs in `segment`, returned
+    as (start, end) offsets relative to the segment (end exclusive)."""
+    runs = []
+    start = None
+    for i, ch in enumerate(segment):
+        if ch.lower() != 'x':
+            if start is None:
+                start = i
+        else:
+            if start is not None:
+                runs.append((start, i))
+                start = None
+    if start is not None:
+        runs.append((start, len(segment)))
+    return runs
+
+
+def refine_char_per_col(input_lines, char_per_col):
+    """
+    Split fixed-width columns at the points where they would otherwise
+    manufacture false overlaps: positions where different paths' literal
+    (hex) sub-patterns and don't-care ('x') regions land at misaligned
+    offsets within the same column.
+
+    For each user-specified column, collect the distinct non-fully-wildcard
+    segment substrings and their "shape" -- the (start, end) offsets of their
+    maximal contiguous constrained (non-'x') runs. If every distinct segment
+    in a column shares the same shape, the column is safe: two different
+    literals at an identically-aligned position are mutually exclusive by
+    construction (the case the existing single-shared-opcode-per-column
+    scheme already handles correctly). If shapes differ, a concrete value
+    could coincidentally satisfy more than one segment's sub-pattern
+    (literal-vs-don't-care at misaligned offsets) -- the false-overlap bug --
+    so the column is cut at the union of all distinct shapes' run boundaries.
+    That guarantees every resulting sub-column is either entirely inside or
+    entirely outside every segment's constrained region.
+
+    Returns (refined_char_per_col, col_group_sizes) where col_group_sizes[i]
+    is the number of refined sub-columns produced from original column i (so
+    callers can remap col_per_file groupings onto the refined columns).
+    """
+    character_ids = []
+    current_index = 0
+    for width in char_per_col:
+        character_ids.append(current_index)
+        current_index += width
+
+    refined = []
+    col_group_sizes = []
+
+    for col_start, width in zip(character_ids, char_per_col):
+        col_end = col_start + width
+        distinct_segments = set()
+        for line in input_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            hex_part = stripped.split()[0]
+            seg = hex_part[col_start:col_end]
+            if _HEX_DIGIT_REGEX.search(seg):
+                distinct_segments.add(seg)
+
+        shapes = {tuple(find_constrained_runs(seg)) for seg in distinct_segments}
+
+        if len(shapes) <= 1:
+            refined.append(width)
+            col_group_sizes.append(1)
+            continue
+
+        cut_points = {0, width}
+        for shape in shapes:
+            for (s, e) in shape:
+                cut_points.add(s)
+                cut_points.add(e)
+        cut_points = sorted(cut_points)
+
+        sub_widths = [cut_points[i + 1] - cut_points[i] for i in range(len(cut_points) - 1)]
+        refined.extend(sub_widths)
+        col_group_sizes.append(len(sub_widths))
+
+    return refined, col_group_sizes
+
+
+def remap_col_per_file(col_per_file, col_group_sizes):
+    """Re-derive a col_per_file grouping (list of refined-column counts per
+    RTL file) so each original column's split pieces stay grouped in the
+    same file -- preserving the user's original file-grouping intent after
+    refine_char_per_col() has expanded the column list."""
+    refined = []
+    orig_idx = 0
+    for count in col_per_file:
+        refined.append(sum(col_group_sizes[orig_idx:orig_idx + count]))
+        orig_idx += count
+    return refined
+
+
 def parse_custom_field(custom):
     """Validate 'custom' is either an empty list or a list of dictionaries.
 
@@ -661,15 +761,15 @@ def build_condition_tree(segment_list, default_id=None):
             if p not in node:
                 node[p] = {}
             elif not isinstance(node[p], dict):
-                # Convert existing leaf ID to a branch, storing the ID in None
-                node[p] = {None: node[p]}
+                # Convert existing leaf ID to a branch; _self_ = "match at this level, no sub-condition"
+                node[p] = {'_self_': node[p]}
             node = node[p]
-        
+
         last_part = parts[-1]
         if last_part in node:
             if isinstance(node[last_part], dict):
                 # Store the ID at this level of the existing branch
-                node[last_part][None] = seg_id
+                node[last_part]['_self_'] = seg_id
             else:
                 node[last_part] = seg_id # Overwrite if exact duplicate
         else:

@@ -262,6 +262,49 @@ Note: the synthetic hex files use the naming convention `synthetic_u{width}_ug{n
 
 ---
 
+## Tool Limitations
+
+This section documents known limitations of the current implementation —
+useful context for anyone evaluating the tool or considering a contribution
+that addresses one of these areas.
+
+1. **Custom (user-defined) tokens cannot be split across group/column
+   boundaries.** Hierarchical decomposition splits fixed-width columns to
+   resolve false-overlap cases between literal and don't-care regions (see
+   `refine_char_per_col` in `engine/utils/utils.py`), recovering the matching
+   semantics that decomposition would otherwise lose. However, this splitting
+   only operates on hex/wildcard content — it has no notion of a custom
+   symbolic token's value space (port/opcode/constant), so overlap analysis
+   cannot be extended across custom tokens, and a custom token must be
+   decomposed/considered as an opaque whole.
+
+2. **A custom token must reside entirely within a single group/column —
+   it cannot straddle a group or data-width boundary.** Token discovery
+   matches a token's `id` string against a column-confined segment
+   (`extract_segments_and_tokens` in `engine/tools/build_rtl_countluts.py`);
+   if a column boundary cuts through the middle of a token, it will not be
+   recognized in either fragment. This constrains the choice of `num_groups`
+   / group datawidth for patterns containing wide tokens.
+
+3. **Fixed nibble-level (4-bit) granularity.** The tool currently decomposes
+   and matches patterns at a 4-bit resolution, which is the standard
+   granularity for networking protocols. Extending to bit-level resolution
+   would broaden applicability to domains such as genomics or signal
+   processing, but would require reworking the column/segment model
+   throughout the pipeline.
+
+Beyond these, the token system currently supports only a fixed set of
+predicates (`RANGE`, `NE`, `EQOR`); extending it to operations such as bit
+counting, parity checks, or masked comparisons — together with relaxing the
+cross-group token constraint above — would broaden applicability to domains
+beyond networking. Likewise, design-space exploration currently requires
+synthesizing each candidate configuration with commercial FPGA tools;
+integrating analytical resource models that predict LUT/FF counts directly
+from the PIR would enable fast architectural search without repeated
+synthesis runs. Contributions in any of these areas are very welcome.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

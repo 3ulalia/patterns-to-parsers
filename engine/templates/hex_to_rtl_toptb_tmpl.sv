@@ -16,8 +16,12 @@ logic [{{ port.width - 1 }}:0] {{ port.name }},
 {% endfor -%}
 logic [{{ comp_din_bits_list[0] - 1 }}:0] data_in;
 logic data_in_sop;
+logic data_in_eop;
+logic data_in_valid;
+logic data_in_ready;
+logic path_id_out_ready;
 logic [{{ lookup_dout_outb_list[-1] }} - 1:0] path_id_out;
-logic data_out_valid;
+logic path_id_out_valid;
 
 // Clock generation
 initial begin
@@ -48,23 +52,32 @@ logic [{{ lookup_dout_outb_list[-1] }}-1:0] golden_q[$] =  {
 initial begin
     rst = 1;
     data_in = '0;
+    data_in_valid = '0;
+    path_id_out_ready = 1'b1;
     #20;
     rst = 0;
     data_in_sop = '0;
+    data_in_eop = '0;
 
     // Send packets
     for (int ii = 0; ii < {{ stimulus_list|length }}; ii = ii + 1) begin
 {% for chunk_idx in range(num_chunks) %}
       @(posedge clk);
+      data_in_valid = 1'b1;
       data_in_sop = {{ "1'b1" if chunk_idx == 0 else "1'b0" }};
+      data_in_eop = {{ "1'b1" if chunk_idx == num_chunks - 1 else "1'b0" }};
       data_in = stimulus_vec[ii][{{ stimulus_width - 1 - chunk_idx * comp_din_bits_list[0] }} -: {{ comp_din_bits_list[0] }}];
 {% endfor %}
       @(posedge clk);
       data_in  = '0;
+      data_in_valid = 1'b0;
       data_in_sop = 1'b0;
+      data_in_eop = 1'b0;
 
-      // Optionally insert idle cycles between packets
-      repeat ($urandom_range(1, 3)) @(posedge clk);
+      // Idle cycles between packets -- generous enough to drain the
+      // comparison/lookup pipeline before the next SOP, so a new packet
+      // can't reset flit_counter mid-flight and corrupt path_id_out.
+      repeat ($urandom_range({{ num_chunks + 2 }}, {{ num_chunks + 5 }})) @(posedge clk);
     end
 
     // Finish after some time
@@ -82,9 +95,12 @@ dut (
     {% endfor -%}
     .data_in        (data_in),
     .data_in_sop    (data_in_sop),
-    .data_out       (),
+    .data_in_eop    (data_in_eop),
+    .data_in_valid  (data_in_valid),
+    .data_in_ready  (data_in_ready),
+    .path_id_out_ready (path_id_out_ready),
     .path_id_out    (path_id_out),
-    .data_out_valid (data_out_valid)
+    .path_id_out_valid (path_id_out_valid)
 );
 
 // Scoreboard
@@ -92,7 +108,7 @@ logic [{{ lookup_dout_outb_list[-1] }}-1:0] dut_q[$];
 
 //store the data from dut into dut_q
 always_ff @ (posedge clk) begin
-    if (data_out_valid) begin
+    if (path_id_out_valid) begin
         dut_q.push_back(path_id_out);
     end
 end

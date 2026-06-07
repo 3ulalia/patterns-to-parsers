@@ -15,7 +15,9 @@ from utils.utils import (
     extract_condition_vars,
     build_condition_tree,
     gen_assign_statements,
-    key_to_condition_v2
+    key_to_condition_v2,
+    refine_char_per_col,
+    remap_col_per_file
 )
 import os
 import re
@@ -25,6 +27,128 @@ import random
 import json
 
 HEX_GROUP_REGEX = re.compile(r'[0-9A-Fa-f]+')
+
+TB_RANDOM_SEED = 0x5A5A1234
+_HEX_FILL_DIGITS = "0123456789abcdef"
+
+
+def select_tb_lines(input_lines, custom_tokens, max_lines=None):
+    """
+    Pick lines from the mask file to drive in an auto-generated testbench.
+
+    Each returned entry is a dict:
+        {hex_orig, hex_filled, opcode, extraction_str, path_id}
+
+    - hex_orig    : the literal/wildcard pattern straight from the mask file
+                    (used to locate which nibbles are real comparison literals)
+    - hex_filled  : hex_orig with every 'x'/'X' nibble replaced by a concrete,
+                    deterministically-randomized hex digit (so the stimulus is
+                    a realistic concrete packet -- no 4-state 'X' driven into
+                    the DUT, and golden field values can be sliced out of it)
+    - opcode      : golden path_id column from the mask file
+    - path_id     : 1-based line index, matching build_extractor_rtl()'s
+                    path_id = i + 1 and the mask's "7'd<N>" golden column
+
+    Lines whose hex pattern contains a custom-token id are skipped entirely --
+    there is no principled way to derive a golden value for a user-defined
+    port/opcode/constant token here (see README "Tool Limitations").
+
+    If max_lines is given, sub-selects an evenly-spaced sample across the
+    distinct opcodes (in order of first appearance) so the chosen lines span
+    different path "families" rather than near-duplicate adjacent lines.
+    """
+    rng = random.Random(TB_RANDOM_SEED)
+
+    parsed = []
+    for i, line in enumerate(input_lines):
+        if not line.strip():
+            continue
+        parts = line.strip().split()
+        if len(parts) < 2:
+            continue
+
+        hex_orig, opcode = parts[0], parts[1]
+        extraction_str = parts[2] if len(parts) > 2 else ""
+
+        if any(ctoken["id"] in hex_orig for ctoken in custom_tokens):
+            continue
+
+        parsed.append((i, hex_orig, opcode, extraction_str))
+
+    # The comparison RTL decomposes each column into literal-value comparators
+    # at whatever granularity (nibble, byte, or wider) keeps paths
+    # distinguishable -- e.g. comparison_logic_*.sv mixes `data_in[47-:4] ==
+    # 4'h6` (nibble-level) and `data_in[47-:8] == 8'h2b` (byte-level) for
+    # overlapping byte positions -- and reports a "no known literal matched"
+    # code for any other value. If a randomly filled don't-care nibble/byte
+    # happens to collide with a literal value some *other* path uses at that
+    # same position, the comparator reports that other path's code instead of
+    # "don't care" and the lookup fails to match (golden mismatch). To avoid
+    # this, collect the literal values observed at each nibble position and
+    # each byte position and steer the random fill away from all of them.
+    reserved_by_nibble_pos = defaultdict(set)
+    reserved_by_byte_pos = defaultdict(set)
+    for _, hex_orig, _, _ in parsed:
+        for pos, ch in enumerate(hex_orig):
+            if ch.lower() != 'x':
+                reserved_by_nibble_pos[pos].add(ch.lower())
+        for bp in range(len(hex_orig) // 2):
+            hi, lo = hex_orig[2 * bp], hex_orig[2 * bp + 1]
+            if hi.lower() != 'x' and lo.lower() != 'x':
+                reserved_by_byte_pos[bp].add((hi.lower(), lo.lower()))
+
+    def pick_nibble(pos):
+        reserved = reserved_by_nibble_pos.get(pos, ())
+        choices = [d for d in _HEX_FILL_DIGITS if d not in reserved] or list(_HEX_FILL_DIGITS)
+        return rng.choice(choices)
+
+    def fill_hex(hex_orig):
+        chars = list(hex_orig)
+        n = len(chars)
+        i = 0
+        while i < n:
+            bp = i // 2
+            if i + 1 < n and chars[i].lower() == 'x' and chars[i + 1].lower() == 'x':
+                byte_reserved = reserved_by_byte_pos.get(bp, ())
+                for _ in range(64):
+                    hi, lo = pick_nibble(i), pick_nibble(i + 1)
+                    if (hi, lo) not in byte_reserved:
+                        break
+                chars[i], chars[i + 1] = hi, lo
+                i += 2
+            else:
+                if chars[i].lower() == 'x':
+                    chars[i] = pick_nibble(i)
+                i += 1
+        return "".join(chars)
+
+    candidates = []
+    for i, hex_orig, opcode, extraction_str in parsed:
+        hex_filled = fill_hex(hex_orig)
+
+        candidates.append({
+            "hex_orig": hex_orig,
+            "hex_filled": hex_filled,
+            "opcode": opcode,
+            "extraction_str": extraction_str,
+            "path_id": i + 1,
+        })
+
+    if max_lines is None or len(candidates) <= max_lines:
+        return candidates
+
+    # Sample evenly across distinct opcodes (in order of first appearance) so
+    # the selected lines land in different path families.
+    seen_opcodes = []
+    first_by_opcode = {}
+    for c in candidates:
+        if c["opcode"] not in first_by_opcode:
+            first_by_opcode[c["opcode"]] = c
+            seen_opcodes.append(c["opcode"])
+
+    step = max(1, len(seen_opcodes) // max_lines)
+    sampled_opcodes = seen_opcodes[::step][:max_lines]
+    return [first_by_opcode[op] for op in sampled_opcodes]
 
 def extract_segments_and_tokens(input_lines, char_per_col, num_cols, character_ids, custom_tokens, debug):
     """
@@ -348,43 +472,11 @@ def build_toptb_rtl(
     custom_tokens,
     outfile_dir
 ):
-    stimulus_list = []
-    golden_list = []
     comp_din_bits_list = [mod['din_bits'] for mod in active_modules]
 
-    for line in input_lines:
-        if not line.strip():
-            continue
-        parts = line.strip().split()
-        if len(parts) < 2:
-            raise ValueError("Each line must have at least <hexstring> <opcode>")
-
-        hex_part, opcode = parts[0], parts[1]
-
-        for ctoken in custom_tokens:
-            ctoken_id = ctoken["id"]
-            if ctoken_id in hex_part:
-                ctoken_type = ctoken["type"]
-                ctoken_opcode = ctoken.get("opcode", "EQ")
-                if ctoken_type == "const":
-                    target_val = str(ctoken["values"][0])
-                    if ctoken_opcode == "NE":
-                        length = len(target_val)
-                        target_val_int = int(target_val, 16)
-                        max_val = (1 << (length * 4)) - 1
-                        while True:
-                            new_int = random.randint(0, max_val)
-                            if new_int != target_val_int:
-                                break
-                        replacement_val = f"{new_int:0{length}X}"
-                    else:
-                        replacement_val = target_val
-                    hex_part = hex_part.replace(ctoken_id, replacement_val)
-                elif ctoken_type == "port":
-                    pass
-
-        stimulus_list.append(hex_part)
-        golden_list.append(opcode)
+    selected = select_tb_lines(input_lines, custom_tokens)
+    stimulus_list = [s["hex_filled"] for s in selected]
+    golden_list = [s["opcode"] for s in selected]
 
     stimulus_width = len(stimulus_list[0])*4
 
@@ -668,6 +760,162 @@ def build_parser_top(config, extractor_fields, outfile_dir):
     # We will pass path_id_width into this function from main.
     pass # logic moved to main to have access to path_id_width
 
+
+def build_parser_toptb_rtl(input_lines, custom_tokens, extractor_fields,
+                           data_width, max_width, path_id_width, outfile_dir):
+    """
+    Auto-generates a self-checking testbench for parser_top.
+
+    Picks a handful of representative, token-free mask lines (see
+    select_tb_lines), drives each as a real flit-streamed packet -- sized to
+    the minimum number of flits that actually contains every comparison
+    literal AND every extracted field for that path -- and checks the
+    resulting field_*_out values against golden values sliced directly out of
+    the same (don't-care-filled) stimulus using the mask's "field:msb:lsb"
+    bit-position metadata. No semantic knowledge of the packet format is
+    needed: the mask hex string already tells us where the literal/comparison
+    nibbles and the extracted-field nibbles are.
+    """
+    nibbles_per_flit = data_width // 4
+    num_pipes = max_width // data_width
+
+    selected = select_tb_lines(input_lines, custom_tokens, max_lines=4)
+
+    packets = []
+    for sel in selected:
+        hex_orig = sel["hex_orig"]
+        hex_filled = sel["hex_filled"]
+
+        # Last literal (non-wildcard) nibble -- defines how far the
+        # comparison logic needs to see into the packet.
+        h_cmp = -1
+        for idx, ch in enumerate(hex_orig):
+            if ch.lower() != 'x':
+                h_cmp = idx
+
+        # A line's extraction string can list the same field at several
+        # candidate bit ranges (e.g. "prot:607:600;...;prot:335:328") --
+        # build_extractor_rtl() renders these as an if/else-if chain ordered
+        # by descending msb, so the highest-msb candidate always wins for any
+        # path that lists it. Replicate that selection here so the golden
+        # value matches what mask_extractor will actually drive.
+        field_tuples = defaultdict(list)
+        for tup in sel["extraction_str"].split(';'):
+            if not tup:
+                continue
+            try:
+                f_name, msb_s, lsb_s = tup.split(':')
+                field_tuples[f_name].append((int(msb_s), int(lsb_s)))
+            except ValueError:
+                continue
+
+        h_ext = -1
+        field_golden_by_name = {}
+        for f_name, tuples in field_tuples.items():
+            msb, lsb = max(tuples, key=lambda t: t[0])
+            nib_start = (max_width - 1 - msb) // 4
+            nib_end = (max_width - 1 - lsb) // 4
+            h_ext = max(h_ext, nib_end)
+            field_golden_by_name[f_name] = hex_filled[nib_start:nib_end + 1]
+
+        h = max(h_cmp, h_ext, 0)
+        n_flits = min(h // nibbles_per_flit + 1, num_pipes)
+
+        flit_values = [
+            hex_filled[i * nibbles_per_flit:(i + 1) * nibbles_per_flit]
+            for i in range(n_flits)
+        ]
+
+        packets.append({
+            "tag": f"path_id={sel['path_id']} (opcode {sel['opcode']})",
+            "n_flits": n_flits,
+            "flits": flit_values,
+            "field_golden_by_name": field_golden_by_name,
+        })
+
+    # Per-field, ordered (one golden value per packet, in driving order).
+    # A path that doesn't define a given field leaves mask_extractor's
+    # case-default in effect, which drives the field to zero.
+    field_goldens = {
+        field["name"]: [
+            pkt["field_golden_by_name"].get(field["name"], "0" * (field["width"] // 4 + 1))
+            for pkt in packets
+        ]
+        for field in extractor_fields
+    }
+
+    module_name = "parser_top_tb"
+    context = {
+        "module": module_name,
+        "data_width": data_width,
+        "num_pipes": num_pipes,
+        "fields": extractor_fields,
+        "packets": packets,
+        "field_goldens": field_goldens,
+    }
+
+    jj_render("parser_top_tb_tmpl.sv", module_name, context, outfile_dir)
+
+def extract_design_features(config, input_lines):
+    """
+    Compute structural features from mask lines + config without generating any RTL.
+    All values are available before the first Jinja2 render — same data the RTL
+    generation functions consume.  Returns a flat dict ready for ML/regression use.
+    """
+    char_per_col = config["char_per_col"]
+    num_cols     = config["num_cols"]
+    custom_tokens = config["custom"]
+    data_width   = config.get("data_width")
+    max_width    = config.get("max_width")
+
+    character_ids = {}
+    current_index = 0
+    for idx, width in enumerate(char_per_col):
+        character_ids[idx] = current_index
+        current_index += width
+    character_ids[len(char_per_col)] = current_index
+
+    _, segment_token_details, segment_id_counter = extract_segments_and_tokens(
+        input_lines, char_per_col, num_cols, character_ids, custom_tokens, debug=False
+    )
+
+    active_cols = sorted(segment_token_details.keys())
+
+    din_bits = sum(clog2(segment_id_counter[col]) for col in active_cols)
+
+    total_segments        = 0
+    total_tokens          = 0
+    total_comparison_bits = 0
+    max_tokens_per_seg    = 0
+    for col in active_cols:
+        for seg in segment_token_details[col]:
+            total_segments += 1
+            n_tok = len(seg["tokens"])
+            total_tokens   += n_tok
+            max_tokens_per_seg = max(max_tokens_per_seg, n_tok)
+            for token in seg["tokens"]:
+                total_comparison_bits += (token["end"] - token["start"]) * 4
+
+    num_paths = sum(1 for l in input_lines if l.strip())
+    dout_bits = clog2(num_paths)
+    num_pipes = (max_width // data_width) if (data_width and max_width) else None
+
+    return {
+        "num_active_cols":        len(active_cols),
+        "num_cols":               num_cols,
+        "din_bits":               din_bits,
+        "dout_bits":              dout_bits,
+        "num_paths":              num_paths,
+        "total_unique_segments":  total_segments,
+        "total_comparison_bits":  total_comparison_bits,
+        "avg_tokens_per_segment": total_tokens / total_segments if total_segments else 0,
+        "max_tokens_per_segment": max_tokens_per_seg,
+        "data_width":             data_width,
+        "max_width":              max_width,
+        "num_pipes":              num_pipes,
+    }
+
+
 def build_rtl_countluts(cfgfilename, mask, countluts, rtl, tree1, tree2, retime, unique1, unique2, outfile_dir, debug):
     raw_config = load_graph_config(cfgfilename)
     config = validate_and_prepare_config(raw_config)
@@ -688,7 +936,20 @@ def build_rtl_countluts(cfgfilename, mask, countluts, rtl, tree1, tree2, retime,
     num_cols = config["num_cols"]
     custom_tokens = config["custom"]
     col_per_file = config["col_per_file"]
-    num_output_split = 1 
+    num_output_split = 1
+
+    # Default flow: refine user-specified columns to eliminate false
+    # positional overlaps (literal hex runs vs. don't-care regions landing
+    # at misaligned offsets within the same column) before any slicing --
+    # see the column-overlap analysis. Splits column boundaries only where
+    # actually needed; untroubled columns keep their original width.
+    char_per_col, col_group_sizes = refine_char_per_col(input_lines, char_per_col)
+    num_cols = len(char_per_col)
+    col_per_file = remap_col_per_file(col_per_file, col_group_sizes)
+
+    if debug:
+        print(f"Refined char_per_col ({num_cols} cols): {char_per_col}")
+        print(f"Refined col_per_file: {col_per_file}")
 
     character_ids = {}
     current_index = 0
@@ -743,6 +1004,10 @@ def build_rtl_countluts(cfgfilename, mask, countluts, rtl, tree1, tree2, retime,
                 "num_pipes": num_pipes
             }
             jj_render("parser_top_rtl_tmpl.sv", module_name, context, outfile_dir)
+
+            # 7. Build parser_top testbench
+            build_parser_toptb_rtl(input_lines, custom_tokens, extractor_fields,
+                                   dw, mw, path_id_width, outfile_dir)
         else:
             print("Skipping parser_top generation: data_width or max_width missing in config.")
 

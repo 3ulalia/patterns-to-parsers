@@ -10,12 +10,15 @@ module {{ module }} (
     {% for port in custom_inputs -%}
     input  logic [{{ port.width - 1 }}:0] {{ port.name }},
     {% endfor -%}
-    input  logic [{{ active_modules[0].din_bits - 1 }}:0]     data_in,
+    input  logic [{{ active_modules[0].din_bits - 1 }}:0]  data_in,
     input  logic    data_in_sop,
-    
-    output logic [{{ lookup_dout_outb_list[-1] - 1 }}:0] path_id_out,
-    output  logic [{{ active_modules[0].din_bits - 1 }}:0]    data_out,
-    output logic    data_out_valid
+    input  logic    data_in_eop,
+    input  logic    data_in_valid,
+    input  logic    path_id_out_ready,
+
+    output logic [{{ lookup_dout_outb_list[-1] - 1 }}:0]  path_id_out,
+    output logic    path_id_out_valid,
+    output logic    data_in_ready
 );
     {#- Determine the Maximum ID to establish total pipeline latency #}
     {%- if active_modules %}
@@ -24,46 +27,79 @@ module {{ module }} (
         {%- set max_id = 0 %}
     {%- endif %}
 
-    // Pipeline depth must cover the range up to max_id, not just the count of modules
-    (* DONT_TOUCH = "TRUE" *) logic [{{ max_id }}+2:0][{{ active_modules[0].din_bits - 1 }}:0] data_in_r;
-    (* DONT_TOUCH = "TRUE" *) logic [{{ max_id }}+2:0] data_in_sop_r;
-    
     logic [{{ lookup_dout_outb_list[-1] - 1 }}:0] path_id_out_tmp;
+    logic eop_d1, eop_d2;
+    logic ready_r;
+    {%- if max_id > 0 %}
+    // flit_counter: 0 after SOP, increments each valid cycle, saturates at max_id
+    logic [$clog2({{ max_id }}+1)-1:0] flit_counter;
+    {%- endif %}
     {% for port in custom_inputs -%}
     (* DONT_TOUCH = "TRUE" *) logic [{{ port.width - 1 }}:0] {{ port.name }}_r;
     {% endfor -%}
 
-    // Register input and output for better timing
-    always_ff @ (posedge clk or posedge rst) begin
+    {%- if max_id > 0 %}
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            flit_counter <= '0;
+        end else if (data_in_valid) begin
+            if (data_in_sop)
+                flit_counter <= '0;
+            else if (flit_counter < {{ max_id }})
+                flit_counter <= flit_counter + 1'b1;
+        end
+    end
+    {%- endif %}
+
+    // EOP delayed two cycles: path_id_out captured on eop_d1 (latches stable),
+    // path_id_out_valid asserted on eop_d2 exactly 2 cycles after EOP.
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            eop_d1 <= '0;
+            eop_d2 <= '0;
+        end else begin
+            eop_d1 <= data_in_valid && data_in_eop;
+            eop_d2 <= eop_d1;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        path_id_out <= path_id_out_tmp;
+    end
+
+    assign path_id_out_valid = eop_d2;
+
+    // ready: sampled at SOP, held for the entire packet; re-evaluated at next SOP
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst)
+            ready_r <= '0;
+        else if (data_in_valid && data_in_sop)
+            ready_r <= path_id_out_ready;
+    end
+    assign data_in_ready = (data_in_valid && data_in_sop && path_id_out_ready) || ready_r;
+
+    {% if custom_inputs %}
+    // Custom input pipeline registers
+    always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
     {% for port in custom_inputs -%}
             {{ port.name }}_r <= '0;
     {% endfor %}
-            data_in_r     <= '0;
-            data_in_sop_r <= '0;
-            path_id_out   <= '0;
-        end else begin
+        end else if (data_in_valid) begin
     {% for port in custom_inputs -%}
             {{ port.name }}_r <= {{ port.name }};
     {% endfor %}
-            // Shift register for data payload
-            data_in_r     <= {data_in_r[{{ max_id }}+1:0], data_in};
-            // Shift register for SOP (Start of Packet) / Valid signal
-            data_in_sop_r <= {data_in_sop_r[{{ max_id }}+1:0], data_in_sop};
-            path_id_out   <= path_id_out_tmp;
         end
     end
-
-    // Use max_id for output assignments to match the comparison latency
-    assign data_out_valid = data_in_sop_r[{{ max_id }}+2];
-    assign data_out       = data_in_r[{{ max_id }}+2];
+    {% endif %}
 
     // Comparison logic
-    {%- if lookup_needed == 1 %} 
-        
+    {%- if lookup_needed == 1 %}
+
         {%- for mod in active_modules %}
         // Module ID: {{ mod.id }}
         logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }};
+        logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }}_latched;
 
         comparison_logic_{{ mod.id }}
         u_comp_{{ mod.id }} (
@@ -71,77 +107,57 @@ module {{ module }} (
             {% for port in custom_inputs -%}
             .{{ port.name }} ({{ port.name }}_r),
             {% endfor -%}
-            .data_in    (data_in_r[0]),
+            .data_in    (data_in),
             .data_out   (dout_comparison_{{ mod.id }})
         );
 
-        {# CORRECTED LOGIC: Calculate delay based on Max ID vs Current ID #}
-        {%- set repeat_count = max_id - mod.id %}
-
-        {%- if repeat_count == 1 %}
-        // Delay of 1 cycle (Align {{ mod.id }} with {{ max_id }})
-        logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }}_q;
-        logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }}_final;
-
+        {%- if mod.id == 0 %}
+        // Module 0: flit 0 is on data_in at SOP — capture at SOP, no reset needed
         always_ff @(posedge clk) begin
-            dout_comparison_{{ mod.id }}_q <= dout_comparison_{{ mod.id }};
+            if (data_in_valid && data_in_sop)
+                dout_comparison_{{ mod.id }}_latched <= dout_comparison_{{ mod.id }};
         end
-
-        assign dout_comparison_{{ mod.id }}_final = dout_comparison_{{ mod.id }}_q;
-
-        {%- elif repeat_count > 1 %}
-        // Delay of {{ repeat_count }} cycles (Align {{ mod.id }} with {{ max_id }})
-        logic [{{ repeat_count - 1 }}:0][{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }}_q;
-        logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }}_final;
-
-        always_ff @(posedge clk) begin
-            dout_comparison_{{ mod.id }}_q <= {dout_comparison_{{ mod.id }}_q[{{ repeat_count - 2 }}:0], dout_comparison_{{ mod.id }}};
-        end
-
-        assign dout_comparison_{{ mod.id }}_final = dout_comparison_{{ mod.id }}_q[{{ repeat_count - 1 }}];
-
         {%- else %}
-        // No delay needed for the last element (ID {{ mod.id }})
-        logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }}_final;
-        assign dout_comparison_{{ mod.id }}_final = dout_comparison_{{ mod.id }};
-
+        // SOP reset clears stale value; capture when flit {{ mod.id }} is on data_in
+        always_ff @(posedge clk) begin
+            if (data_in_valid && data_in_sop)
+                dout_comparison_{{ mod.id }}_latched <= '0;
+            else if (data_in_valid && (flit_counter == {{ mod.id - 1 }}))
+                dout_comparison_{{ mod.id }}_latched <= dout_comparison_{{ mod.id }};
+        end
         {%- endif %}
+
         {%- endfor %}
 
-        // Lookup logic instantiation
+        // lookup_logic is purely combinational; no extra pipeline stage needed
         logic [{{ lookup_din_outb_list[-1] - 1 }}:0] lookup_input;
-        (* DONT_TOUCH = "TRUE" *) logic [{{ lookup_din_outb_list[-1] - 1 }}:0] lookup_input_q;
 
         assign lookup_input = {
             {%- for mod in active_modules -%}
                 {%- if not loop.last %}
-            dout_comparison_{{ mod.id }}_final,
+            dout_comparison_{{ mod.id }}_latched,
                 {%- else %}
-            dout_comparison_{{ mod.id }}_final
+            dout_comparison_{{ mod.id }}_latched
                 {%- endif -%}
             {%- endfor %}
         };
 
-        always_ff @(posedge clk) begin
-            lookup_input_q <= lookup_input;
-        end
-
-        lookup_logic 
+        lookup_logic
         u_lookup (
             .clk        (clk),
-            .data_in    (lookup_input_q),
+            .data_in    (lookup_input),
             .data_out   (path_id_out_tmp)
         );
 
     {%- else %}
-        // Single comparison file case (No lookup needed)
+        // Single comparison module — no lookup needed
         comparison_logic_{{ active_modules[0].id }}
         u_comp (
             .clk        (clk),
             {% for port in custom_inputs -%}
             .{{ port.name }} ({{ port.name }}_r),
             {% endfor -%}
-            .data_in    (data_in_r[0]),
+            .data_in    (data_in),
             .data_out   (path_id_out_tmp)
         );
     {% endif %}

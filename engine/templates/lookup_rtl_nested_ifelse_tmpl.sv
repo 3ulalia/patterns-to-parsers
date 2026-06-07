@@ -13,29 +13,32 @@ module {{ module }} (
 always_comb begin
     data_out = '0;
 
-{%- macro recurse(tree, bit_offset=0, indent='    ') %}
-{%- set raw_keys = tree.keys() | reject('equalto', '__value__') | list %}
-{%- for key in raw_keys %}
-    {%- if key[:8] == '__skip__' %}
-        {%- set skip_width = key[8:] | int %}
-{{ recurse(tree[key], bit_offset + skip_width, indent) }}
-    {%- else %}
-        {%- set slice_msb = din_bits - bit_offset - 1 %}
-        {%- set slice_len = key | length %}
-        {%- set slice_expr = "data_in[{} -: {}]".format(slice_msb, slice_len) %}
-        {%- set bin_value = "{}'b{}".format(slice_len, key) %}
-
-{{ indent }}{% if loop.first %}if{% else %}else if{% endif %} ({{ slice_expr }} == {{ bin_value }}) begin
-{{ recurse(tree[key], bit_offset + slice_len, indent + '    ') }}
-{{ indent }}end
-    {%- endif %}
-{%- endfor %}
-{%- if '__value__' in tree %}
-{{ indent }}data_out = {{ tree['__value__'] }};
-{%- endif %}
+{% macro recurse(tree, bit_offset=0, indent='    ') %}
+{%- set ns = namespace(lines=[]) -%}
+{%- set raw_keys = tree.keys() | reject('equalto', '__value__') | list -%}
+{%- for key in raw_keys -%}
+  {%- if key[:8] == '__skip__' -%}
+    {%- set skip_width = key[8:] | int -%}
+    {%- set ns.lines = ns.lines + [recurse(tree[key], bit_offset + skip_width, indent)] -%}
+  {%- else -%}
+    {%- set slice_msb = din_bits - bit_offset - 1 -%}
+    {%- set slice_len = key | length -%}
+    {%- set slice_expr = "data_in[%d -: %d]" % (slice_msb, slice_len) -%}
+    {%- set bin_value = "%d'b%s" % (slice_len, key) -%}
+    {%- set kw = 'if' if loop.first else 'else if' -%}
+    {%- set ns.lines = ns.lines + [
+           indent ~ kw ~ " (" ~ slice_expr ~ " == " ~ bin_value ~ ") begin",
+           recurse(tree[key], bit_offset + slice_len, indent + '    '),
+           indent ~ "end"
+         ] -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if '__value__' in tree -%}
+  {%- set ns.lines = ns.lines + [indent ~ "data_out = " ~ tree['__value__'] ~ ";"] -%}
+{%- endif -%}
+{{- ns.lines | join('\n') -}}
 {%- endmacro %}
-
-{{ recurse(nested_tree) }}
+{{- recurse(nested_tree) }}
 
 end
 

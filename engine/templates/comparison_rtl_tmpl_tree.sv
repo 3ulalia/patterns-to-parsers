@@ -29,7 +29,10 @@ input logic [{{ inp.width - 1 }}:0] {{ inp.name }},
    Keeps indentation, strips whitespace, uses else-if priority
 --------------------------------------------------------------------- #}
 {%- macro emit_tree(tree, outvar, indent=1, first=True) -%}
-{%- set keys = tree.keys() | reject('equalto', '_default_') | list -%}
+{%- set keys = tree.keys() | reject('equalto', '_default_') | reject('equalto', '_self_') | list -%}
+{%- if keys | length == 0 and '_self_' in tree %}
+{{ "  " * indent }}{{ outvar }} = {{ tree['_self_'] }};
+{%- else %}
 {%- for key in keys %}
 {{ "  " * indent }}{% if first and loop.first %}if{% else %}else if{% endif %} (({{ key }})) begin
 {%- if tree[key] is mapping %}
@@ -39,6 +42,12 @@ input logic [{{ inp.width - 1 }}:0] {{ inp.name }},
 {%- endif %}
 {{ "  " * indent }}end
 {%- endfor %}
+{%- if '_self_' in tree %}
+{{ "  " * indent }}else begin
+{{ "  " * (indent+1) }}{{ outvar }} = {{ tree['_self_'] }};
+{{ "  " * indent }}end
+{%- endif %}
+{%- endif %}
 {%- endmacro -%}
 
 
