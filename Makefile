@@ -23,9 +23,9 @@
 #   make synth   TOOL=quartus  DIR=p4_out/full_parser
 #   make extract TOOL=vivado   DIR=p4_out/full_parser
 #
-# Override tool paths if not on PATH:
+# Override tool paths / FPGA part if not on PATH or targeting a different device:
 #   make synth VIVADO=/path/to/vivado QUARTUS=/path/to/quartus_sh
-#   make table1 VIVADO=/path/to/vivado
+#   make table1-synth VIVADO=/path/to/vivado PART=xcku025-ffva1156-1-c CONFIG=full_dw64_tree
 # =============================================================================
 
 SHELL := /bin/bash
@@ -46,6 +46,7 @@ SNORT_WIDTH := 128  # max packet width in bytes
 TOOL    ?= vivado
 VIVADO  ?= vivado
 QUARTUS ?= quartus_sh
+PART    ?=                  # optional FPGA part override; uses tool-default when unset
 
 # ---------------------------------------------------------------------------
 # Simulation settings (Verilator)
@@ -66,9 +67,8 @@ DONE_FILES := $(addsuffix /.done,$(SUBDIRS))
 # Artifact Evaluation — Table 1 configurations
 # ---------------------------------------------------------------------------
 TABLE1_DIR        := artifact_out/table1
-TABLE1_XDC        := $(CURDIR)/vivado.xdc
+XDC               ?= $(CURDIR)/vivado.xdc
 TABLE1_RESULTS    := table1_results.csv
-TABLE1_PART       ?= xcvc1902-vsva2197-3HP-e-S
 
 TABLE1_SIMPLE_DWS := 256 320
 TABLE1_FULL_DWS   := 64 320 512
@@ -184,9 +184,9 @@ $(DIR)/%/.done:
 	echo " Running $(TOOL) for $$subdir"; \
 	echo "=========================================="; \
 	if [ "$(TOOL)" = "vivado" ]; then \
-	    $(VIVADO) -mode batch -source $(VIV_TCL_SCRIPT) -tclargs $(DIR) $$subdir || exit 1; \
+	    $(VIVADO) -mode batch -source $(VIV_TCL_SCRIPT) -tclargs $(DIR) $$subdir $(PART) || exit 1; \
 	elif [ "$(TOOL)" = "quartus" ]; then \
-	    $(QUARTUS) -t $(QUA_TCL_SCRIPT) $$subdir || exit 1; \
+	    $(QUARTUS) -t $(QUA_TCL_SCRIPT) $$subdir $(PART) || exit 1; \
 	    proj_name=$$(basename $$subdir)_proj; \
 	    $(QUARTUS) --flow compile $$subdir/quartus_proj/$$proj_name || exit 1; \
 	else \
@@ -269,7 +269,7 @@ table1-synth:
 	    echo " Synthesizing: $$subdir"; \
 	    echo "------------------------------------------"; \
 	    $(VIVADO) -mode batch -source $(VIV_TCL_SCRIPT) \
-	        -tclargs $(TABLE1_DIR) $$subdir $(TABLE1_XDC) parser_top $(TABLE1_PART) || exit 1; \
+	        -tclargs $(TABLE1_DIR) $$subdir $(XDC) parser_top $(PART) || exit 1; \
 	    touch $$subdir/.done; \
 	done
 	@echo "Synthesis complete."
@@ -333,7 +333,7 @@ fig6-synth:
 	    echo "------------------------------------------"; \
 	    echo " Synthesizing (Quartus): $$subdir"; \
 	    echo "------------------------------------------"; \
-	    $(QUARTUS) -t $(QUA_TCL_SCRIPT) $$subdir || exit 1; \
+	    $(QUARTUS) -t $(QUA_TCL_SCRIPT) $$subdir $(PART) || exit 1; \
 	    $(QUARTUS) --flow compile $$subdir/quartus_proj/$$proj_name || exit 1; \
 	    touch $$subdir/.done; \
 	done
@@ -360,7 +360,7 @@ fig7-synth:
 	    echo " Synthesizing (Vivado): $$subdir"; \
 	    echo "------------------------------------------"; \
 	    $(VIVADO) -mode batch -source $(VIV_TCL_SCRIPT) \
-	        -tclargs $(FIG_6_7_DIR) $$subdir $(TABLE1_XDC) || exit 1; \
+	        -tclargs $(FIG_6_7_DIR) $$subdir $(XDC) parser_top $(PART) || exit 1; \
 	    touch $$subdir/.done; \
 	done
 	@echo "Vivado synthesis complete."
@@ -410,7 +410,7 @@ table3-synth-vivado:
 	    echo "Error: Vivado not found. Set VIVADO=/path/to/vivado"; exit 1; \
 	fi
 	$(VIVADO) -mode batch -source $(VIV_TCL_SCRIPT) \
-	    -tclargs $(dir $(TABLE3_DESIGN)) $(abspath $(TABLE3_DESIGN)) $(TABLE1_XDC) hex_to_rtl_top
+	    -tclargs $(dir $(TABLE3_DESIGN)) $(abspath $(TABLE3_DESIGN)) $(XDC) hex_to_rtl_top $(PART)
 
 table3-synth-quartus:
 	@echo "================================================================"
@@ -419,7 +419,7 @@ table3-synth-quartus:
 	@if ! command -v $(QUARTUS) >/dev/null 2>&1; then \
 	    echo "Error: Quartus not found. Set QUARTUS=/path/to/quartus_sh"; exit 1; \
 	fi
-	$(QUARTUS) -t $(QUA_TCL_SCRIPT) $(abspath $(TABLE3_DESIGN))
+	$(QUARTUS) -t $(QUA_TCL_SCRIPT) $(abspath $(TABLE3_DESIGN)) $(PART)
 	$(QUARTUS) --flow compile \
 	    $(abspath $(TABLE3_DESIGN))/quartus_proj/$(notdir $(TABLE3_DESIGN))_proj
 
@@ -478,7 +478,7 @@ fig9-synth:
 	    echo " Synthesizing: $$subdir"; \
 	    echo "------------------------------------------"; \
 	    $(VIVADO) -mode batch -source $(VIV_TCL_SCRIPT) \
-	        -tclargs $(FIG9_DIR) $$subdir $(TABLE1_XDC) hex_to_rtl_top || exit 1; \
+	        -tclargs $(FIG9_DIR) $$subdir $(XDC) hex_to_rtl_top $(PART) || exit 1; \
 	    touch $$subdir/.done; \
 	done
 	@echo "Vivado synthesis complete."
