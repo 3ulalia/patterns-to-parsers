@@ -63,7 +63,7 @@ If already on your `PATH`, omit the `VIVADO=` / `QUARTUS=` overrides in the comm
 
 ## Artifact Evaluation
 
-`artifact_out/` is committed to the repository with pre-generated RTL and self-checking testbenches for all paper results. No p4c or any RTL generation step is required — you can go straight to simulation or synthesis.
+`artifact_out/` is committed with pre-generated RTL and self-checking testbenches for all paper results. The typical flow is: **RTL → Simulate → Synthesize**.
 
 | Artifact | Contents | Synthesis tool | Output CSV |
 |---|---|---|---|
@@ -72,9 +72,20 @@ If already on your `PATH`, omit the `VIVADO=` / `QUARTUS=` overrides in the comm
 | `artifact_out/table3/` | Snort 10-rule parser | Vivado + Quartus | `table3_results.csv` |
 | `artifact_out/fig9/` | Synthetic benchmarks: flat + decomposed × 3 widths × 4 ug — 24 configs | Vivado | `fig9_results.csv` |
 
-### Simulation
+### Step 1 — RTL Generation
 
-Each design ships with two self-checking testbenches (`hex_to_rtl_top_tb` and `parser_top_tb`). Run all of them:
+`artifact_out/` is already committed and ready to use. Regenerate it only if needed (e.g. after modifying templates):
+
+```bash
+make table1-rtl    # → artifact_out/table1/
+make table3-rtl    # → artifact_out/table3/snort_10rule/
+make fig_6_7-rtl   # → artifact_out/fig_6_7/   (shared by Fig 6 & 7)
+make fig9-rtl      # → artifact_out/fig9/
+```
+
+### Step 2 — Simulation
+
+Each design ships with self-checking testbenches (`hex_to_rtl_top_tb` and `parser_top_tb`). Run all artifact simulations:
 
 ```bash
 make sim VERILATOR=/path/to/verilator
@@ -89,88 +100,66 @@ make sim-fig_6_7  VERILATOR=/path/to/verilator
 make sim-fig9     VERILATOR=/path/to/verilator
 ```
 
-To run a single configuration instead of the full sweep, pass `CONFIG=<subdir-name>`:
+Pass `CONFIG=<subdir-name>` to run a single configuration instead of the full sweep:
 
 ```bash
-make sim-table1  CONFIG=full_dw64_tree   VERILATOR=/path/to/verilator
+make sim-table1  CONFIG=full_dw64_tree      VERILATOR=/path/to/verilator
 make sim-fig_6_7 CONFIG=simple_dw128_unique VERILATOR=/path/to/verilator
-make sim-fig9    CONFIG=flat_u256_ug1    VERILATOR=/path/to/verilator
+make sim-fig9    CONFIG=flat_u256_ug1       VERILATOR=/path/to/verilator
 ```
 
-Each config compiles into `<design_dir>/sim_build/` (not committed). Any `MISMATCH` in the testbench output causes a non-zero exit. A VCD waveform (`<tb_name>.vcd`) is written to `sim_build/` alongside the binary.
+Each config compiles into `<design_dir>/sim_build/` (not committed). Any `MISMATCH` in the output causes a non-zero exit. A VCD waveform (`<tb_name>.vcd`) is written to `sim_build/` alongside the binary.
 
-### Synthesis — Table 1
+### Step 3 — Synthesis
+
+#### Table 1
 
 LUT count, FF count, and Fmax for Simple Parser (256b, 320b) and Full Parser (64b, 320b, 512b) in both unique and tree configurations.
 
 ```bash
-make table1-synth   VIVADO=/path/to/vivado          # synthesize all 10 configs
+make table1-synth   VIVADO=/path/to/vivado                        # all 10 configs
 make table1-synth   VIVADO=/path/to/vivado CONFIG=full_dw64_tree  # single config
-make table1-extract                                  # parse reports → table1_results.csv
+make table1-extract                                                # → table1_results.csv
 ```
 
-To regenerate the RTL before synthesizing (not normally needed):
-
-```bash
-make table1-rtl
-```
-
-### Synthesis — Table 3
+#### Table 3
 
 Fmax, LUT (Vivado), ALM (Quartus), and FF for the Snort 10-rule parser on both toolchains.
 
 ```bash
 make table3-synth-vivado   VIVADO=/path/to/vivado
 make table3-synth-quartus  QUARTUS=/path/to/quartus_sh
-make table3-extract                                  # parse both reports → table3_results.csv
+make table3-extract                                                # → table3_results.csv
 ```
 
-To regenerate the RTL:
-
-```bash
-make table3-rtl
-```
-
-### Synthesis — Figure 6
+#### Figure 6
 
 ALM count and Fmax (Quartus / Intel Agilex 5) sweeping Simple and Full parser across all data widths.
 
 ```bash
-make fig6-synth   QUARTUS=/path/to/quartus_sh       # synthesize all 10 configs
-make fig6-synth   QUARTUS=/path/to/quartus_sh CONFIG=full_dw128_unique  # single config
-make fig6-extract                                    # parse reports → fig6_results.csv
+make fig6-synth   QUARTUS=/path/to/quartus_sh                          # all 10 configs
+make fig6-synth   QUARTUS=/path/to/quartus_sh CONFIG=full_dw128_unique # single config
+make fig6-extract                                                        # → fig6_results.csv
 ```
 
-### Synthesis — Figure 7
+#### Figure 7
 
-LUT count and Fmax (Vivado / AMD Versal) for the same configurations as Figure 6. Shares the same RTL.
+LUT count and Fmax (Vivado / AMD Versal) for the same configurations as Figure 6. Shares the same RTL as Figure 6.
 
 ```bash
-make fig7-synth   VIVADO=/path/to/vivado            # synthesize all 10 configs
-make fig7-synth   VIVADO=/path/to/vivado CONFIG=full_dw128_unique  # single config
-make fig7-extract                                    # parse reports → fig7_results.csv
+make fig7-synth   VIVADO=/path/to/vivado                          # all 10 configs
+make fig7-synth   VIVADO=/path/to/vivado CONFIG=full_dw128_unique # single config
+make fig7-extract                                                  # → fig7_results.csv
 ```
 
-To regenerate the shared RTL for Figures 6 & 7:
-
-```bash
-make fig_6_7-rtl
-```
-
-### Synthesis — Figure 9
+#### Figure 9
 
 LUT count and Fmax (Vivado) for synthetic benchmarks across two graph configs (flat, decomposed), three data widths (256, 512, 1024b), and four uniqueness groups — 24 configurations total.
 
 ```bash
-make fig9-synth   VIVADO=/path/to/vivado            # synthesize all 24 configs (~6–7 hours)
+make fig9-synth   VIVADO=/path/to/vivado                       # all 24 configs (~6–7 hours)
 make fig9-synth   VIVADO=/path/to/vivado CONFIG=flat_u256_ug1  # single config
-make fig9-extract                                    # parse reports → fig9_results.csv
-```
-
-To regenerate the RTL:
-
-```bash
-make fig9-rtl
+make fig9-extract                                               # → fig9_results.csv
 ```
 
 ---
