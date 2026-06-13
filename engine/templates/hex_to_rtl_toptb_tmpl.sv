@@ -50,6 +50,8 @@ logic [{{ lookup_dout_outb_list[-1] }}-1:0] golden_q[$] =  {
 
 //Driving Stimulus to DUT
 initial begin
+    $dumpfile("{{ module }}.vcd");
+    $dumpvars(0, {{ module }});
     rst = 1;
     data_in = '0;
     data_in_valid = '0;

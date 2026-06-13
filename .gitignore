@@ -2,7 +2,6 @@
 p4_out/
 synthetic_out/
 snort_out/
-artifact_out/
 
 # Engine temporaries
 engine/tmp/
@@ -23,6 +22,9 @@ fig9_results.csv
 parser_rtl/rtl/*/vivado_proj/
 parser_rtl/rtl/*/quartus_proj/
 parser_rtl/rtl/*/.done
+
+# Verilator simulation build directories
+**/sim_build/
 
 # P4 compiler artifacts
 *.p4i

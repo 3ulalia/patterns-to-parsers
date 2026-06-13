@@ -13,7 +13,7 @@
 #   make fig6        — reproduce Figure 6 (Quartus):  RTL + synth + CSV
 #   make fig7        — reproduce Figure 7 (Vivado):   RTL + synth + CSV
 #   make fig9        — reproduce Figure 9 (Vivado):   RTL + synth + CSV
-#   make fig-rtl     — RTL shared by fig6 & fig7 (no tool needed)
+#   make fig_6_7-rtl — RTL shared by fig6 & fig7 (no tool needed)
 #   make table1-rtl  — Table 1 RTL only (no tool needed)
 #   make table3-rtl  — Table 3 RTL only (no tool needed)
 #   make fig9-rtl    — Figure 9 RTL only (no tool needed)
@@ -47,6 +47,14 @@ TOOL    ?= vivado
 VIVADO  ?= vivado
 QUARTUS ?= quartus_sh
 
+# ---------------------------------------------------------------------------
+# Simulation settings (Verilator)
+# ---------------------------------------------------------------------------
+VERILATOR  ?= verilator
+VER_FLAGS  := --binary --sv --timing --trace \
+              -Wno-TIMESCALEMOD -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-IMPLICITSTATIC
+SIM_DIR    := sim_build
+
 VIV_TCL_SCRIPT ?= run_vivado.tcl
 QUA_TCL_SCRIPT ?= run_quartus.tcl
 
@@ -60,12 +68,13 @@ DONE_FILES := $(addsuffix /.done,$(SUBDIRS))
 TABLE1_DIR        := artifact_out/table1
 TABLE1_XDC        := $(CURDIR)/vivado.xdc
 TABLE1_RESULTS    := table1_results.csv
+TABLE1_PART       ?= xcvc1902-vsva2197-3HP-e-S
 
 TABLE1_SIMPLE_DWS := 256 320
 TABLE1_FULL_DWS   := 64 320 512
 TABLE1_MODES      := tree unique
 
-FIG_DIR     := artifact_out/fig
+FIG_6_7_DIR := artifact_out/fig_6_7
 FIG_DWS     := 64 128 256 320 512
 FIG6_CSV    := fig6_results.csv
 FIG7_CSV    := fig7_results.csv
@@ -77,13 +86,14 @@ FIG9_DIR      := artifact_out/fig9
 FIG9_CSV      := fig9_results.csv
 
 .PHONY: all p4 p4_full p4_simple synthetic snort \
-        synth run extract clean clean-synth clean-done \
+        synth run extract clean clean-synth clean-done clean-sim \
         table1 table1-rtl table1-synth table1-extract \
         fig6 fig6-synth fig6-extract \
         fig7 fig7-synth fig7-extract \
-        fig-rtl \
+        fig_6_7-rtl \
         table3 table3-rtl table3-synth-vivado table3-synth-quartus table3-extract \
-        fig9 fig9-rtl fig9-synth fig9-extract
+        fig9 fig9-rtl fig9-synth fig9-extract \
+        sim sim-table1 sim-table3 sim-fig_6_7 sim-fig9
 
 
 # =============================================================================
@@ -248,18 +258,18 @@ table1-rtl:
 
 table1-synth:
 	@echo "================================================================"
-	@echo " Table 1 — Vivado Synthesis ($(TABLE1_DIR))"
+	@echo " Table 1 — Vivado Synthesis ($(TABLE1_DIR)$(if $(CONFIG), / $(CONFIG),))"
 	@echo "================================================================"
 	@if ! command -v $(VIVADO) >/dev/null 2>&1; then \
 	    echo "Error: Vivado not found. Set VIVADO=/path/to/vivado"; exit 1; \
 	fi
-	@for d in $(TABLE1_DIR)/*/; do \
+	@for d in $(if $(CONFIG),$(TABLE1_DIR)/$(CONFIG),$(TABLE1_DIR)/*/); do \
 	    subdir=$$(cd "$$d" && pwd); \
 	    echo "------------------------------------------"; \
 	    echo " Synthesizing: $$subdir"; \
 	    echo "------------------------------------------"; \
 	    $(VIVADO) -mode batch -source $(VIV_TCL_SCRIPT) \
-	        -tclargs $(TABLE1_DIR) $$subdir $(TABLE1_XDC) || exit 1; \
+	        -tclargs $(TABLE1_DIR) $$subdir $(TABLE1_XDC) parser_top $(TABLE1_PART) || exit 1; \
 	    touch $$subdir/.done; \
 	done
 	@echo "Synthesis complete."
@@ -278,17 +288,17 @@ table1-extract:
 # Fig 7: Simple + Full parser, all DWs, unique config → Vivado  → fig7_results.csv
 #
 # RTL is shared between both figures (same configs, different tool).
-# Individual steps: fig-rtl | fig6-synth | fig6-extract  (same for fig7)
+# Individual steps: fig_6_7-rtl | fig6-synth | fig6-extract  (same for fig7)
 # =============================================================================
 
-fig-rtl:
+fig_6_7-rtl:
 	@echo "================================================================"
 	@echo " Figures 6 & 7 — RTL Generation (unique, dw=$(FIG_DWS))"
 	@echo "================================================================"
-	@mkdir -p $(FIG_DIR)
+	@mkdir -p $(FIG_6_7_DIR)
 	@for dw in $(FIG_DWS); do \
 	    mw=$$(python3 -c "import math; print(math.ceil($(SIMPLE_PARSER_MW)/$$dw)*$$dw)"); \
-	    out=$(FIG_DIR)/simple_dw$${dw}_unique; \
+	    out=$(FIG_6_7_DIR)/simple_dw$${dw}_unique; \
 	    echo "  simple_parser  dw=$$dw  mw=$$mw  -->  $$out"; \
 	    python3 engine/p4_to_rtl.py \
 	        --p4 p4/simple_parser.p4 \
@@ -298,7 +308,7 @@ fig-rtl:
 	done
 	@for dw in $(FIG_DWS); do \
 	    mw=$$(python3 -c "import math; print(math.ceil($(FULL_PARSER_MW)/$$dw)*$$dw)"); \
-	    out=$(FIG_DIR)/full_dw$${dw}_unique; \
+	    out=$(FIG_6_7_DIR)/full_dw$${dw}_unique; \
 	    echo "  full_parser    dw=$$dw  mw=$$mw  -->  $$out"; \
 	    python3 engine/p4_to_rtl.py \
 	        --p4 p4/full_parser.p4 \
@@ -306,18 +316,18 @@ fig-rtl:
 	        --mode unique \
 	        --o $$out || exit 1; \
 	done
-	@echo "Figures RTL written to $(FIG_DIR)/"
+	@echo "Figures 6 & 7 RTL written to $(FIG_6_7_DIR)/"
 
-fig6: fig-rtl fig6-synth fig6-extract
+fig6: fig_6_7-rtl fig6-synth fig6-extract
 
 fig6-synth:
 	@echo "================================================================"
-	@echo " Figure 6 — Quartus Synthesis ($(FIG_DIR))"
+	@echo " Figure 6 — Quartus Synthesis ($(FIG_6_7_DIR)$(if $(CONFIG), / $(CONFIG),))"
 	@echo "================================================================"
 	@if ! command -v $(QUARTUS) >/dev/null 2>&1; then \
 	    echo "Error: Quartus not found. Set QUARTUS=/path/to/quartus_sh"; exit 1; \
 	fi
-	@for d in $(FIG_DIR)/*/; do \
+	@for d in $(if $(CONFIG),$(FIG_6_7_DIR)/$(CONFIG),$(FIG_6_7_DIR)/*/); do \
 	    subdir=$$(cd "$$d" && pwd); \
 	    proj_name=$$(basename $$subdir)_proj; \
 	    echo "------------------------------------------"; \
@@ -333,24 +343,24 @@ fig6-extract:
 	@echo "================================================================"
 	@echo " Figure 6 — Extracting results → $(FIG6_CSV)"
 	@echo "================================================================"
-	@python3 fig_extract.py $(FIG_DIR) $(FIG6_CSV) --tool quartus
+	@python3 fig_extract.py $(FIG_6_7_DIR) $(FIG6_CSV) --tool quartus
 
-fig7: fig-rtl fig7-synth fig7-extract
+fig7: fig_6_7-rtl fig7-synth fig7-extract
 
 fig7-synth:
 	@echo "================================================================"
-	@echo " Figure 7 — Vivado Synthesis ($(FIG_DIR))"
+	@echo " Figure 7 — Vivado Synthesis ($(FIG_6_7_DIR)$(if $(CONFIG), / $(CONFIG),))"
 	@echo "================================================================"
 	@if ! command -v $(VIVADO) >/dev/null 2>&1; then \
 	    echo "Error: Vivado not found. Set VIVADO=/path/to/vivado"; exit 1; \
 	fi
-	@for d in $(FIG_DIR)/*/; do \
+	@for d in $(if $(CONFIG),$(FIG_6_7_DIR)/$(CONFIG),$(FIG_6_7_DIR)/*/); do \
 	    subdir=$$(cd "$$d" && pwd); \
 	    echo "------------------------------------------"; \
 	    echo " Synthesizing (Vivado): $$subdir"; \
 	    echo "------------------------------------------"; \
 	    $(VIVADO) -mode batch -source $(VIV_TCL_SCRIPT) \
-	        -tclargs $(FIG_DIR) $$subdir $(TABLE1_XDC) || exit 1; \
+	        -tclargs $(FIG_6_7_DIR) $$subdir $(TABLE1_XDC) || exit 1; \
 	    touch $$subdir/.done; \
 	done
 	@echo "Vivado synthesis complete."
@@ -359,7 +369,7 @@ fig7-extract:
 	@echo "================================================================"
 	@echo " Figure 7 — Extracting results → $(FIG7_CSV)"
 	@echo "================================================================"
-	@python3 fig_extract.py $(FIG_DIR) $(FIG7_CSV) --tool vivado
+	@python3 fig_extract.py $(FIG_6_7_DIR) $(FIG7_CSV) --tool vivado
 
 
 # =============================================================================
@@ -457,12 +467,12 @@ fig9-rtl:
 
 fig9-synth:
 	@echo "================================================================"
-	@echo " Figure 9 — Vivado Synthesis ($(FIG9_DIR))"
+	@echo " Figure 9 — Vivado Synthesis ($(FIG9_DIR)$(if $(CONFIG), / $(CONFIG),))"
 	@echo "================================================================"
 	@if ! command -v $(VIVADO) >/dev/null 2>&1; then \
 	    echo "Error: Vivado not found. Set VIVADO=/path/to/vivado"; exit 1; \
 	fi
-	@for d in $(FIG9_DIR)/*/; do \
+	@for d in $(if $(CONFIG),$(FIG9_DIR)/$(CONFIG),$(FIG9_DIR)/*/); do \
 	    subdir=$$(cd "$$d" && pwd); \
 	    echo "------------------------------------------"; \
 	    echo " Synthesizing: $$subdir"; \
@@ -481,8 +491,137 @@ fig9-extract:
 
 
 # =============================================================================
-# CLEAN
+# SIMULATION (Verilator)
+#
+# Compiles each design with Verilator and runs the bundled testbench(es).
+# Build artefacts go into <design_dir>/sim_build/ and are not committed.
+# Any MISMATCH in testbench output causes a non-zero exit.
+#
+# Targets:
+#   sim              — run all artifact simulations
+#   sim-table1       — hex_to_rtl_top_tb + parser_top_tb for all 10 Table 1 configs
+#   sim-table3       — hex_to_rtl_top_tb for the Snort 10-rule parser
+#   sim-fig_6_7      — hex_to_rtl_top_tb + parser_top_tb for all 10 Fig 6 & 7 configs
+#   sim-fig9         — hex_to_rtl_top_tb for all 24 Fig 9 configs
+#
+# Optional CONFIG= filter runs a single named subdirectory:
+#   make sim-table1 CONFIG=full_dw64_tree
+#   make sim-fig_6_7 CONFIG=simple_dw128_unique
+#   make sim-fig9 CONFIG=flat_u256_ug1
+#
+# Override VERILATOR= if not on PATH:
+#   make sim VERILATOR=/path/to/verilator
 # =============================================================================
+
+CONFIG ?=
+
+sim: sim-table1 sim-table3 sim-fig_6_7 sim-fig9
+
+# _sim_one: compile + run one testbench for a fixed (non-shell-variable) path.
+# Used only for sim-table3 where the design dir is a Make variable.
+# Args: $(1)=design_dir  $(2)=top_module  $(3)=binary_name
+define _sim_one
+	echo "---------- [SIM] $(2): $(1) ----------"; \
+	if ! command -v $(VERILATOR) >/dev/null 2>&1; then \
+	    echo "Error: Verilator not found. Set VERILATOR=/path/to/verilator"; exit 1; \
+	fi; \
+	$(VERILATOR) $(VER_FLAGS) --top $(2) $(1)/*.sv \
+	    --Mdir $(1)/$(SIM_DIR) -o $(3) 2>&1 \
+	    | grep -Ev "^g\+\+|python3 .+verilator_includer" || true; \
+	sim_out=$$(cd "$(1)/$(SIM_DIR)" && ./$(3) 2>&1); \
+	echo "$$sim_out"; \
+	if echo "$$sim_out" | grep -q "MISMATCH"; then \
+	    echo "FAIL: mismatch — $(1) (top=$(2))"; exit 1; \
+	fi; \
+	echo "PASS: $(1) (top=$(2))"
+endef
+
+# sim-table1 and the multi-dir targets use fully-inlined shell to avoid
+# Make re-expanding $$shell_var references substituted via $(call).
+sim-table1:
+	@echo "================================================================"
+	@echo " Simulation — Table 1  ($(TABLE1_DIR)$(if $(CONFIG), / $(CONFIG),))"
+	@echo "================================================================"
+	@if ! command -v $(VERILATOR) >/dev/null 2>&1; then \
+	    echo "Error: Verilator not found. Set VERILATOR=/path/to/verilator"; exit 1; \
+	fi
+	@for d in $(if $(CONFIG),$(TABLE1_DIR)/$(CONFIG),$(TABLE1_DIR)/*/); do \
+	    subdir=$$(cd "$$d" && pwd); \
+	    for top in hex_to_rtl_top_tb parser_top_tb; do \
+	        case "$$top" in hex_to_rtl_top_tb) bin=sim_hex ;; *) bin=sim_parser ;; esac; \
+	        echo ""; \
+	        echo "---------- [SIM] $$top: $$subdir ----------"; \
+	        $(VERILATOR) $(VER_FLAGS) --top $$top "$$subdir"/*.sv \
+	            --Mdir "$$subdir/$(SIM_DIR)" -o $$bin 2>&1 \
+	            | grep -Ev "^g\+\+|python3 .+verilator_includer" || true; \
+	        sim_out=$$(cd "$$subdir/$(SIM_DIR)" && ./$$bin 2>&1); \
+	        echo "$$sim_out"; \
+	        if echo "$$sim_out" | grep -q "MISMATCH"; then \
+	            echo "FAIL: mismatch — $$subdir (top=$$top)"; exit 1; \
+	        fi; \
+	        echo "PASS: $$subdir (top=$$top)"; \
+	    done; \
+	done
+	@echo ""; echo "Table 1 simulation complete."
+
+sim-table3:
+	@echo "================================================================"
+	@echo " Simulation — Table 3  ($(TABLE3_DESIGN))"
+	@echo "================================================================"
+	@$(call _sim_one,$(abspath $(TABLE3_DESIGN)),hex_to_rtl_top_tb,sim_hex)
+	@echo ""; echo "Table 3 simulation complete."
+
+sim-fig_6_7:
+	@echo "================================================================"
+	@echo " Simulation — Figures 6 & 7  ($(FIG_6_7_DIR)$(if $(CONFIG), / $(CONFIG),))"
+	@echo "================================================================"
+	@if ! command -v $(VERILATOR) >/dev/null 2>&1; then \
+	    echo "Error: Verilator not found. Set VERILATOR=/path/to/verilator"; exit 1; \
+	fi
+	@for d in $(if $(CONFIG),$(FIG_6_7_DIR)/$(CONFIG),$(FIG_6_7_DIR)/*/); do \
+	    subdir=$$(cd "$$d" && pwd); \
+	    for top in hex_to_rtl_top_tb parser_top_tb; do \
+	        case "$$top" in hex_to_rtl_top_tb) bin=sim_hex ;; *) bin=sim_parser ;; esac; \
+	        echo ""; \
+	        echo "---------- [SIM] $$top: $$subdir ----------"; \
+	        $(VERILATOR) $(VER_FLAGS) --top $$top "$$subdir"/*.sv \
+	            --Mdir "$$subdir/$(SIM_DIR)" -o $$bin 2>&1 \
+	            | grep -Ev "^g\+\+|python3 .+verilator_includer" || true; \
+	        sim_out=$$(cd "$$subdir/$(SIM_DIR)" && ./$$bin 2>&1); \
+	        echo "$$sim_out"; \
+	        if echo "$$sim_out" | grep -q "MISMATCH"; then \
+	            echo "FAIL: mismatch — $$subdir (top=$$top)"; exit 1; \
+	        fi; \
+	        echo "PASS: $$subdir (top=$$top)"; \
+	    done; \
+	done
+	@echo ""; echo "Figures 6 & 7 simulation complete."
+
+sim-fig9:
+	@echo "================================================================"
+	@echo " Simulation — Figure 9  ($(FIG9_DIR)$(if $(CONFIG), / $(CONFIG),))  [may be slow]"
+	@echo "================================================================"
+	@if ! command -v $(VERILATOR) >/dev/null 2>&1; then \
+	    echo "Error: Verilator not found. Set VERILATOR=/path/to/verilator"; exit 1; \
+	fi
+	@for d in $(if $(CONFIG),$(FIG9_DIR)/$(CONFIG),$(FIG9_DIR)/*/); do \
+	    subdir=$$(cd "$$d" && pwd); \
+	    echo ""; \
+	    echo "---------- [SIM] hex_to_rtl_top_tb: $$subdir ----------"; \
+	    $(VERILATOR) $(VER_FLAGS) --top hex_to_rtl_top_tb "$$subdir"/*.sv \
+	        --Mdir "$$subdir/$(SIM_DIR)" -o sim_hex 2>&1 \
+	        | grep -Ev "^g\+\+|python3 .+verilator_includer" || true; \
+	    sim_out=$$(cd "$$subdir/$(SIM_DIR)" && ./sim_hex 2>&1); \
+	    echo "$$sim_out"; \
+	    if echo "$$sim_out" | grep -q "MISMATCH"; then \
+	        echo "FAIL: mismatch — $$subdir (top=hex_to_rtl_top_tb)"; exit 1; \
+	    fi; \
+	    echo "PASS: $$subdir (top=hex_to_rtl_top_tb)"; \
+	done
+	@echo ""; echo "Figure 9 simulation complete."
+
+
+
 
 clean:
 	@echo "Removing generated RTL outputs and temporaries..."
@@ -492,6 +631,10 @@ clean:
 	       snort_frontend/snort_out_config.json \
 	       snort_frontend/snort_out_msg_map.txt \
 	       $(TABLE1_RESULTS) $(FIG6_CSV) $(FIG7_CSV) $(TABLE3_CSV) $(FIG9_CSV)
+
+clean-sim:
+	@echo "Removing Verilator build directories..."
+	find artifact_out/ -type d -name "$(SIM_DIR)" -exec rm -rf {} + 2>/dev/null || true
 
 clean-synth:
 	@echo "Cleaning synthesis projects ($(TOOL)) in $(DIR)..."

@@ -91,6 +91,8 @@ end
 
 // ── stimulus ──────────────────────────────────────────────────────────────
 initial begin
+    $dumpfile("{{ module }}.vcd");
+    $dumpvars(0, {{ module }});
     rst            = 1'b1;
     field_ready_in = 1'b1;
     data_in        = '0;
