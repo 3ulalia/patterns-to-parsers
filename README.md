@@ -117,7 +117,7 @@ Each config compiles into `<design_dir>/sim_build/` (not committed). Any `MISMAT
 LUT count, FF count, and Fmax for Simple Parser (256b, 320b) and Full Parser (64b, 320b, 512b) in both unique and tree configurations.
 
 ```bash
-make table1-synth   VIVADO=/path/to/vivado PART=<FPGA PART>       # all 10 configs, Part is optiona, defaults to versal
+make table1-synth   VIVADO=/path/to/vivado PART=xc7vx690tffg1761-2 # all 10 configs, Virtex 7 FPGA Part to match previous papers
 make table1-synth   VIVADO=/path/to/vivado CONFIG=full_dw64_tree  # single config
 make table1-extract                                               # → table1_results.csv
 ```
