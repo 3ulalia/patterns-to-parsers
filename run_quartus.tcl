@@ -2,15 +2,15 @@
 # run_quartus.tcl
 # Quartus batch setup for a single design directory
 # Usage:
-#   quartus_sh -t run_quartus.tcl <design_dir>
+#   quartus_sh -t run_quartus.tcl <design_dir> [device]
 #   quartus_sh --flow compile <project_name>
 # =========================================================
 
 # ---------------------------
-# 1️⃣ Parse arguments
+# 1. Parse arguments
 # ---------------------------
 if { $argc < 1 } {
-    puts "Usage: quartus_sh -t run_quartus.tcl <design_dir>"
+    puts "Usage: quartus_sh -t run_quartus.tcl <design_dir> \[device\]"
     exit 1
 }
 
@@ -20,6 +20,13 @@ set dir_name [file tail $design_dir]
 set proj_name "${dir_name}_proj"
 set proj_dir "${design_dir}/quartus_proj"
 
+# device: optional 2nd argument; defaults to Agilex 5 A5DD064AB32BI1V
+if { $argc >= 2 } {
+    set fpga_device [lindex $argv 1]
+} else {
+    set fpga_device "A5DD064AB32BI1V"
+}
+
 file mkdir $proj_dir
 cd $proj_dir
 
@@ -27,19 +34,20 @@ puts "Setting up project: $proj_name"
 puts "Design directory: $design_dir"
 
 # ---------------------------
-# 2️⃣ Create project
+# 2. Create project
 # ---------------------------
 project_new $proj_name -overwrite
 
 # ---------------------------
-# 3️⃣ Family, device, top-level
+# 3. Family, device, top-level
 # ---------------------------
+puts "Using Quartus device: $fpga_device"
 set_global_assignment -name FAMILY "Agilex 5"
-set_global_assignment -name DEVICE A5DD064AB32BI1V
+set_global_assignment -name DEVICE $fpga_device
 set_global_assignment -name TOP_LEVEL_ENTITY hex_to_rtl_top
 
 # ---------------------------
-# 4️⃣ Add Verilog / SV files
+# 4. Add Verilog / SV files
 # ---------------------------
 set verilog_files {}
 foreach f [glob -nocomplain -directory $design_dir *.v *.sv] {
@@ -79,7 +87,7 @@ set_instance_assignment -name VIRTUAL_PIN ON -to data_sop_i
 set_instance_assignment -name VIRTUAL_PIN ON -to clk
 
 # ---------------------------
-# 6️⃣ Finalize
+# 5. Finalize
 # ---------------------------
 project_close
 

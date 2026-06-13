@@ -1,16 +1,19 @@
 # ============================================================
 # run_vivado.tcl — batch flow for one subdesign
 # Usage:
-#   vivado -mode batch -source run_vivado.tcl -tclargs <base_dir> <design_dir>
+#   vivado -mode batch -source run_vivado.tcl \
+#       -tclargs <base_dir> <design_dir> [xdc_path] [top_entity] [part]
 # Example:
-#   vivado -mode batch -source run_vivado.tcl -tclargs parser_rtl/rtl_sh parser_rtl/rtl_sh/design1
+#   vivado -mode batch -source run_vivado.tcl \
+#       -tclargs artifact_out/table1 artifact_out/table1/full_dw64_unique \
+#       vivado.xdc parser_top xcku025-ffva1156-1-c
 # ============================================================
 
 # ------------------------------------------------------------
 # Validate arguments
 # ------------------------------------------------------------
 if { $argc < 2 } {
-    puts "Usage: vivado -mode batch -source run_vivado.tcl -tclargs <base_dir> <design_dir> \[xdc_path\]"
+    puts "Usage: vivado -mode batch -source run_vivado.tcl -tclargs <base_dir> <design_dir> \[xdc_path\] \[top_entity\] \[part\]"
     exit 1
 }
 
@@ -29,6 +32,13 @@ if {![file exists $xdc_file]} {
     exit 1
 }
 
+# part: optional 5th argument; defaults to xcvc1902-vsva2197-3HP-e-S
+if { $argc >= 5 } {
+    set fpga_part [lindex $argv 4]
+} else {
+    set fpga_part "xcvc1902-vsva2197-3HP-e-S"
+}
+
 # ------------------------------------------------------------
 # Process this design
 # ------------------------------------------------------------
@@ -40,8 +50,8 @@ set proj_name "${dir_name}_proj"
 set proj_dir "${design_dir}/vivado_proj"
 
 # Create project
-create_project $proj_name $proj_dir -part xcvc1902-vsva2197-3HP-e-S -force
-#create_project $proj_name $proj_dir -part xcku025-ffva1156-1-c -force
+puts "Using FPGA part: $fpga_part"
+create_project $proj_name $proj_dir -part $fpga_part -force
 set_property target_language Verilog [current_project]
 
 # Collect SystemVerilog files
@@ -54,7 +64,7 @@ if {[llength $sv_files] == 0} {
 
 add_files -norecurse $sv_files
 
-# top-level entity: optional 4th argument, defaults to parser_top
+# top-level entity: optional 4th argument; defaults to parser_top
 if { $argc >= 4 } {
     set top_entity [lindex $argv 3]
 } else {
