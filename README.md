@@ -19,42 +19,23 @@ PatternToParser/
 ├── snort_frontend/       # Snort rule parser (inputs for Flow 3)
 │   ├── snort.txt         # Example Snort rules (5 rules)
 │   └── snort_10_rule.txt # Larger example (10 rules)
+├── artifact_out/         # Pre-generated RTL for all paper results (committed)
 ├── Makefile              # Push-button flows
 ├── requirements.txt
 └── LICENSE
 ```
-
-**Generated outputs** (created by `make`, not committed):
-
-| Directory | Contents |
-|---|---|
-| `p4_out/` | RTL from Flow 1 (P4 input) |
-| `synthetic_out/` | RTL from Flow 2 (synthetic input) |
-| `snort_out/` | RTL from Flow 3 (Snort input) |
-
-**Pre-generated artifact RTL** (committed, ready for synthesis):
-
-| Directory | Contents |
-|---|---|
-| `artifact_out/table1/` | RTL for all 10 Table 1 configurations |
-| `artifact_out/fig_6_7/` | RTL for Figures 6 & 7 (all parsers × data widths, unique mode) |
-| `artifact_out/table3/` | RTL for Table 3 (Snort 10-rule parser) |
-| `artifact_out/fig9/` | RTL for Figure 9 (synthetic benchmarks, 24 configurations) |
 
 ---
 
 ## Requirements
 
 ### Python dependencies
-- Python 3.8+
-- [jinja2](https://pypi.org/project/Jinja2/) — for RTL template rendering
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt   # jinja2 + snort frontend deps
 ```
 
 ### p4c (required only for Flow 1 — P4 → RTL)
-Install the P4 reference compiler:
 
 ```bash
 # Ubuntu/Debian
@@ -68,23 +49,144 @@ brew install p4lang/p4/p4c
 
 Verify: `p4c --version`
 
+### Verilator (required for simulation)
+
+Install via [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build/releases) (recommended) or your system package manager.
+
+Verify: `verilator --version`
+
+### Vivado / Quartus (required for synthesis)
+
+If already on your `PATH`, omit the `VIVADO=` / `QUARTUS=` overrides in the commands below.
+
 ---
 
-## Reproducing Paper Results
+## Artifact Evaluation
+
+`artifact_out/` is committed to the repository with pre-generated RTL and self-checking testbenches for all paper results. No p4c or any RTL generation step is required — you can go straight to simulation or synthesis.
+
+| Artifact | Contents | Synthesis tool | Output CSV |
+|---|---|---|---|
+| `artifact_out/table1/` | Simple Parser (256b, 320b) + Full Parser (64b, 320b, 512b) × {tree, unique} — 10 configs | Vivado | `table1_results.csv` |
+| `artifact_out/fig_6_7/` | Simple + Full parser × 5 data widths, unique mode — 10 configs | Quartus (Fig 6) / Vivado (Fig 7) | `fig6_results.csv`, `fig7_results.csv` |
+| `artifact_out/table3/` | Snort 10-rule parser | Vivado + Quartus | `table3_results.csv` |
+| `artifact_out/fig9/` | Synthetic benchmarks: flat + decomposed × 3 widths × 4 ug — 24 configs | Vivado | `fig9_results.csv` |
+
+### Simulation
+
+Each design ships with two self-checking testbenches (`hex_to_rtl_top_tb` and `parser_top_tb`). Run all of them:
+
+```bash
+make sim VERILATOR=/path/to/verilator
+```
+
+Or per artifact:
+
+```bash
+make sim-table1   VERILATOR=/path/to/verilator
+make sim-table3   VERILATOR=/path/to/verilator
+make sim-fig_6_7  VERILATOR=/path/to/verilator
+make sim-fig9     VERILATOR=/path/to/verilator
+```
+
+To run a single configuration instead of the full sweep, pass `CONFIG=<subdir-name>`:
+
+```bash
+make sim-table1  CONFIG=full_dw64_tree   VERILATOR=/path/to/verilator
+make sim-fig_6_7 CONFIG=simple_dw128_unique VERILATOR=/path/to/verilator
+make sim-fig9    CONFIG=flat_u256_ug1    VERILATOR=/path/to/verilator
+```
+
+Each config compiles into `<design_dir>/sim_build/` (not committed). Any `MISMATCH` in the testbench output causes a non-zero exit. A VCD waveform (`<tb_name>.vcd`) is written to `sim_build/` alongside the binary.
+
+### Synthesis — Table 1
+
+LUT count, FF count, and Fmax for Simple Parser (256b, 320b) and Full Parser (64b, 320b, 512b) in both unique and tree configurations.
+
+```bash
+make table1-synth   VIVADO=/path/to/vivado          # synthesize all 10 configs
+make table1-synth   VIVADO=/path/to/vivado CONFIG=full_dw64_tree  # single config
+make table1-extract                                  # parse reports → table1_results.csv
+```
+
+To regenerate the RTL before synthesizing (not normally needed):
+
+```bash
+make table1-rtl
+```
+
+### Synthesis — Table 3
+
+Fmax, LUT (Vivado), ALM (Quartus), and FF for the Snort 10-rule parser on both toolchains.
+
+```bash
+make table3-synth-vivado   VIVADO=/path/to/vivado
+make table3-synth-quartus  QUARTUS=/path/to/quartus_sh
+make table3-extract                                  # parse both reports → table3_results.csv
+```
+
+To regenerate the RTL:
+
+```bash
+make table3-rtl
+```
+
+### Synthesis — Figure 6
+
+ALM count and Fmax (Quartus / Intel Agilex 5) sweeping Simple and Full parser across all data widths.
+
+```bash
+make fig6-synth   QUARTUS=/path/to/quartus_sh       # synthesize all 10 configs
+make fig6-synth   QUARTUS=/path/to/quartus_sh CONFIG=full_dw128_unique  # single config
+make fig6-extract                                    # parse reports → fig6_results.csv
+```
+
+### Synthesis — Figure 7
+
+LUT count and Fmax (Vivado / AMD Versal) for the same configurations as Figure 6. Shares the same RTL.
+
+```bash
+make fig7-synth   VIVADO=/path/to/vivado            # synthesize all 10 configs
+make fig7-synth   VIVADO=/path/to/vivado CONFIG=full_dw128_unique  # single config
+make fig7-extract                                    # parse reports → fig7_results.csv
+```
+
+To regenerate the shared RTL for Figures 6 & 7:
+
+```bash
+make fig_6_7-rtl
+```
+
+### Synthesis — Figure 9
+
+LUT count and Fmax (Vivado) for synthetic benchmarks across two graph configs (flat, decomposed), three data widths (256, 512, 1024b), and four uniqueness groups — 24 configurations total.
+
+```bash
+make fig9-synth   VIVADO=/path/to/vivado            # synthesize all 24 configs (~6–7 hours)
+make fig9-synth   VIVADO=/path/to/vivado CONFIG=flat_u256_ug1  # single config
+make fig9-extract                                    # parse reports → fig9_results.csv
+```
+
+To regenerate the RTL:
+
+```bash
+make fig9-rtl
+```
+
+---
+
+## Using the Tool
+
+This section is for users who want to generate parsers from their own inputs, experiment with different configurations, or run synthesis outside the artifact evaluation flows.
 
 ### Flow 1 — P4 → RTL
 
-Compiles the full and simple P4 parsers to SystemVerilog, sweeping data widths of 64, 128, 256, 320, and 512 bits.
+Compiles the bundled P4 parsers to SystemVerilog, sweeping data widths of 64, 128, 256, 320, and 512 bits.
 
 ```bash
-make p4
-```
-
-Or individually:
-
-```bash
-make p4_full     # full_parser.p4  → p4_out/full_parser/dw_{64,128,256,320,512}/
-make p4_simple   # simple_parser.p4 → p4_out/simple_parser/dw_{64,128,256,320,512}/
+make p4                # both parsers, all widths → p4_out/
+make p4_full           # full_parser.p4  → p4_out/full_parser/dw_{64,128,256,320,512}/
+make p4_simple         # simple_parser.p4 → p4_out/simple_parser/dw_{64,128,256,320,512}/
 ```
 
 Each output directory contains:
@@ -92,11 +194,11 @@ Each output directory contains:
 - `lookup_logic.sv` — path ID lookup
 - `mask_extractor.sv` — field extractor
 - `hex_to_rtl_top.sv` + `hex_to_rtl_top_tb.sv` — top-level and testbench
-- `parser_top.sv` — full parser top connecting all modules
+- `parser_top.sv` + `parser_top_tb.sv` — full parser top and testbench
 
 ### Flow 2 — Synthetic Benchmarks → RTL
 
-Generates RTL from pre-computed synthetic hex tables (no p4c needed).
+Generates RTL from pre-computed synthetic hex tables. No p4c required.
 
 ```bash
 make synthetic
@@ -109,146 +211,37 @@ Output: `synthetic_out/{one_group,multi_group}_synthetic_u{256,512,1024}_ug{1,2,
 Converts a Snort rule text file to a packet-matching RTL.
 
 ```bash
-make snort
-```
-
-To use a different rule file:
-
-```bash
-make snort SNORT_INPUT=snort_frontend/snort_10_rule.txt
+make snort                                               # uses snort_frontend/snort_10_rule.txt
+make snort SNORT_INPUT=snort_frontend/snort.txt          # custom rule file
 ```
 
 Output: `snort_out/`
 
-### Run all flows
+### Run all generation flows
 
 ```bash
 make all
 ```
 
-### Clean generated outputs
+### Synthesis on custom output directories
+
+The `synth` and `extract` targets are not tied to the artifact flows — point them at any directory of RTL subdirectories:
 
 ```bash
-make clean
+make synth   TOOL=vivado  DIR=p4_out/full_parser VIVADO=/path/to/vivado
+make extract TOOL=vivado  DIR=p4_out/full_parser
+make synth   TOOL=quartus DIR=p4_out/full_parser QUARTUS=/path/to/quartus_sh
 ```
 
----
-
-## Artifact Evaluation
-
-`artifact_out/` is committed to the repository with pre-generated RTL for all paper results — no p4c needed to reach the synthesis step. If Vivado or Quartus is already on your `PATH`, omit the `VIVADO=` / `QUARTUS=` overrides below.
-
-| Artifact | Tool | Output |
-|---|---|---|
-| Table 1 | Vivado | `table1_results.csv` |
-| Table 3 | Vivado + Quartus | `table3_results.csv` |
-| Figure 6 | Quartus | `fig6_results.csv` |
-| Figure 7 | Vivado | `fig7_results.csv` |
-| Figure 9 | Vivado | `fig9_results.csv` |
-
----
-
-### Table 1
-
-LUT count, flip-flop count, and Fmax for Simple Parser (256 b, 320 b) and Full Parser (64 b, 320 b, 512 b) in both unique and tree configurations (10 configs total), synthesized with Vivado.
+### Clean
 
 ```bash
-make table1-rtl                              # generate RTL → artifact_out/table1/
-make table1-synth  VIVADO=/path/to/vivado   # synthesize all 10 configs
-make table1-extract                          # parse reports → table1_results.csv
+make clean        # remove generated RTL output directories (p4_out/, synthetic_out/, snort_out/)
+make clean-sim    # remove sim_build/ directories inside artifact_out/
+make clean-synth  # remove synthesis project directories and .done markers
 ```
 
----
-
-### Table 3
-
-Fmax, LUT (Vivado), ALM (Quartus), and FF for the Snort 10-rule parser on both FPGA toolchains.
-
-```bash
-make table3-rtl                                # generate RTL → artifact_out/table3/snort_10rule/
-make table3-synth-vivado  VIVADO=/path/to/vivado
-make table3-synth-quartus QUARTUS=/path/to/quartus_sh
-make table3-extract                            # parse both reports → table3_results.csv
-```
-
----
-
-### Figure 6
-
-ALM count and Fmax (Quartus / Intel Agilex 5) sweeping Simple and Full parser across all data widths (64, 128, 256, 320, 512 b) in the unique configuration.
-
-```bash
-make fig_6_7-rtl                                  # generate RTL → artifact_out/fig_6_7/
-make fig6-synth  QUARTUS=/path/to/quartus_sh  # synthesize all 10 configs
-make fig6-extract                             # parse reports → fig6_results.csv
-```
-
----
-
-### Figure 7
-
-LUT count and Fmax (Vivado / AMD Versal) sweeping the same configurations as Figure 6. Shares the same RTL — skip `fig-rtl` if already generated for Figure 6.
-
-```bash
-make fig_6_7-rtl                               # skip if already done for Figure 6
-make fig7-synth  VIVADO=/path/to/vivado   # synthesize all 10 configs
-make fig7-extract                          # parse reports → fig7_results.csv
-```
-
----
-
-### Figure 9
-
-LUT count and Fmax (Vivado) for synthetic benchmarks across two parser graph configurations (flat, decomposed), three data widths (256, 512, 1024 b), and four uniqueness group counts (ug1–ug4) — 24 configurations total.
-
-```bash
-make fig9-rtl                              # generate RTL → artifact_out/fig9/
-make fig9-synth  VIVADO=/path/to/vivado   # synthesize 24 configs (~6–7 hours)
-make fig9-extract                          # parse reports → fig9_results.csv
-```
-
----
-
-## Simulation
-
-Each generated design includes self-checking testbenches that can be run with [Verilator](https://www.veripool.org/verilator/) — no commercial tools required.
-
-Install via [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build/releases) (recommended) or your system package manager, then verify:
-
-```bash
-verilator --version
-```
-
-Run all artifact simulations:
-
-```bash
-make sim VERILATOR=/path/to/verilator
-```
-
-Or per artifact:
-
-```bash
-make sim-table1   # hex_to_rtl_top_tb + parser_top_tb for all 10 Table 1 configs
-make sim-table3   # hex_to_rtl_top_tb for the Snort 10-rule parser
-make sim-fig_6_7  # hex_to_rtl_top_tb + parser_top_tb for all 10 Fig 6 & 7 configs
-make sim-fig9     # hex_to_rtl_top_tb for all 24 Fig 9 configs (large files, slow compile)
-```
-
-Pass `CONFIG=<subdir-name>` to run a single configuration instead of the whole sweep:
-
-```bash
-make sim-table1  CONFIG=full_dw64_tree
-make sim-fig_6_7 CONFIG=simple_dw128_unique
-make sim-fig9    CONFIG=flat_u256_ug1
-```
-
-Each config is compiled into `<design_dir>/sim_build/` and run immediately. Any `MISMATCH` in the output causes a non-zero exit. Remove build artifacts with `make clean-sim`.
-
-If Verilator is already on your `PATH`, omit the `VERILATOR=` override.
-
----
-
-## Configuration
+### Configuration variables
 
 All variables can be overridden on the `make` command line.
 
@@ -257,10 +250,11 @@ All variables can be overridden on the `make` command line.
 | `VIVADO` | `vivado` | Path to the Vivado executable |
 | `QUARTUS` | `quartus_sh` | Path to the Quartus Shell executable |
 | `VERILATOR` | `verilator` | Path to the Verilator executable |
-| `TABLE1_PART` | `xcvc1902-vsva2197-3HP-e-S` | Target FPGA part string passed to Vivado for Table 1 synthesis |
-| `SNORT_INPUT` | `snort_frontend/snort_10_rule.txt` | Snort rule file used by `make snort` and `make table3-rtl` |
+| `CONFIG` | _(all)_ | Limit a synth or sim sweep to one named subdirectory |
+| `TABLE1_PART` | `xcvc1902-vsva2197-3HP-e-S` | FPGA part passed to Vivado for Table 1 |
+| `SNORT_INPUT` | `snort_frontend/snort_10_rule.txt` | Snort rule file for `make snort` / `make table3-rtl` |
 | `SNORT_WIDTH` | `128` | Maximum packet width in bytes for the Snort flow |
-| `DWS` | `64 128 256 320 512` | Data widths swept in `make p4` (Flow 1) |
+| `DWS` | `64 128 256 320 512` | Data widths swept in `make p4` |
 
 **Examples:**
 
@@ -268,69 +262,29 @@ All variables can be overridden on the `make` command line.
 # Synthesize Table 1 on a different FPGA part
 make table1-synth VIVADO=/opt/Xilinx/Vivado/2023.2/bin/vivado TABLE1_PART=xcku025-ffva1156-1-c
 
-# Run the Snort flow with a custom rule file and packet width
+# Run the Snort flow with a custom rule file and narrower packet width
 make snort SNORT_INPUT=snort_frontend/snort.txt SNORT_WIDTH=64
 
-# Sweep a different set of data widths in Flow 1
+# Sweep only a subset of data widths in Flow 1
 make p4 DWS="64 256 512"
-```
 
-**Quartus device override:** The default Quartus device (`A5DD064AB32BI1V`, Agilex 5) is set in `run_quartus.tcl`. Pass a different device as the second argument when invoking the script directly:
-
-```bash
+# Override the Quartus target device (Agilex 5 is the default)
 quartus_sh -t run_quartus.tcl artifact_out/table3/snort_10rule 10AX115S2F45I1SG
-```
-
-**Generic synthesis target:** The `synth` and `extract` make targets accept any directory of RTL subdirectories and are not tied to the artifact flows:
-
-```bash
-make synth   TOOL=vivado  DIR=p4_out/full_parser VIVADO=/path/to/vivado
-make extract TOOL=vivado  DIR=p4_out/full_parser
-make synth   TOOL=quartus DIR=p4_out/full_parser QUARTUS=/path/to/quartus_sh
 ```
 
 ---
 
 ## Tool Limitations
 
-This section documents known limitations of the current implementation —
-useful context for anyone evaluating the tool or considering a contribution
-that addresses one of these areas.
+Known limitations — useful context for anyone evaluating the tool or considering a contribution.
 
-1. **Custom (user-defined) tokens cannot be split across group/column
-   boundaries.** Hierarchical decomposition splits fixed-width columns to
-   resolve false-overlap cases between literal and don't-care regions (see
-   `refine_char_per_col` in `engine/utils/utils.py`), recovering the matching
-   semantics that decomposition would otherwise lose. However, this splitting
-   only operates on hex/wildcard content — it has no notion of a custom
-   symbolic token's value space (port/opcode/constant), so overlap analysis
-   cannot be extended across custom tokens, and a custom token must be
-   decomposed/considered as an opaque whole.
+1. **Custom tokens cannot be split across group/column boundaries.** Hierarchical decomposition splits fixed-width columns to resolve false-overlap cases between literal and don't-care regions, recovering the matching semantics that decomposition would otherwise lose. However, this splitting has no notion of a custom symbolic token's value space (port/opcode/constant), so overlap analysis cannot be extended across custom tokens — a custom token must be treated as an opaque whole.
 
-2. **A custom token must reside entirely within a single group/column —
-   it cannot straddle a group or data-width boundary.** Token discovery
-   matches a token's `id` string against a column-confined segment
-   (`extract_segments_and_tokens` in `engine/tools/build_rtl_countluts.py`);
-   if a column boundary cuts through the middle of a token, it will not be
-   recognized in either fragment. This constrains the choice of `num_groups`
-   / group datawidth for patterns containing wide tokens.
+2. **A custom token must reside entirely within a single group/column — it cannot straddle a group or data-width boundary.** Token discovery matches a token's `id` string against a column-confined segment; if a column boundary cuts through the middle of a token it will not be recognized in either fragment. This constrains the choice of `num_groups` / group datawidth for patterns containing wide tokens.
 
-3. **Fixed nibble-level (4-bit) granularity.** The tool currently decomposes
-   and matches patterns at a 4-bit resolution, which is the standard
-   granularity for networking protocols. Extending to bit-level resolution
-   would broaden applicability to domains such as genomics or signal
-   processing, but would require reworking the column/segment model
-   throughout the pipeline.
+3. **Fixed nibble-level (4-bit) granularity.** The tool decomposes and matches patterns at 4-bit resolution, which is standard for networking protocols. Extending to bit-level resolution would broaden applicability to domains such as genomics or signal processing, but would require reworking the column/segment model throughout the pipeline.
 
-Beyond these, the token system currently supports only a fixed set of
-predicates (`RANGE`, `NE`, `EQOR`); extending it to operations such as bit
-counting, parity checks, or masked comparisons — together with relaxing the
-cross-group token constraint above — would broaden applicability to domains
-beyond networking. Likewise, design-space exploration currently requires
-synthesizing each candidate configuration with commercial FPGA tools;
-integrating analytical resource models that predict LUT/FF counts directly
-from the PIR would enable fast architectural search without repeated
-synthesis runs. Contributions in any of these areas are very welcome.
+Beyond these, the token system currently supports only a fixed set of predicates (`RANGE`, `NE`, `EQOR`). Extending it to operations such as bit counting, parity checks, or masked comparisons — together with relaxing the cross-group token constraint above — would broaden applicability beyond networking. Design-space exploration currently requires synthesizing each candidate with commercial FPGA tools; integrating analytical resource models that predict LUT/FF counts directly from the PIR would enable fast architectural search without repeated synthesis runs.
 
 ---
 
