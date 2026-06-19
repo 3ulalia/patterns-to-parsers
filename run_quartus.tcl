@@ -76,15 +76,15 @@ if {[file exists "$design_dir/../../../quartus.sdc"]} {
 }
 
 
-# Example virtual pin assignments (if needed)
-set_instance_assignment -name VIRTUAL_PIN ON -to sip_o
-set_instance_assignment -name VIRTUAL_PIN ON -to dip_o
-set_instance_assignment -name VIRTUAL_PIN ON -to sp_o
-set_instance_assignment -name VIRTUAL_PIN ON -to dp_o
-set_instance_assignment -name VIRTUAL_PIN ON -to rst
-set_instance_assignment -name VIRTUAL_PIN ON -to data_i
-set_instance_assignment -name VIRTUAL_PIN ON -to data_sop_i
-set_instance_assignment -name VIRTUAL_PIN ON -to clk
+# Virtual pin assignments — avoids physical I/O pin exhaustion on wide-bus designs
+set_instance_assignment -name VIRTUAL_PIN ON -to data_in
+set_instance_assignment -name VIRTUAL_PIN ON -to data_in_sop
+set_instance_assignment -name VIRTUAL_PIN ON -to data_in_eop
+set_instance_assignment -name VIRTUAL_PIN ON -to data_in_valid
+set_instance_assignment -name VIRTUAL_PIN ON -to path_id_out_ready
+set_instance_assignment -name VIRTUAL_PIN ON -to path_id_out
+set_instance_assignment -name VIRTUAL_PIN ON -to path_id_out_valid
+set_instance_assignment -name VIRTUAL_PIN ON -to data_in_ready
 
 # ---------------------------
 # 5. Finalize
