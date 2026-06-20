@@ -460,7 +460,7 @@ fig9-rtl:
 	        echo "  $$label  u$$width  ug$$ug  -->  $$out"; \
 	        PYTHONPATH=engine python3 engine/tools/build_rtl_countluts.py \
 	            -c $$json -m $$hex \
-	            -o $$out --rtl --unique1 --unique2 || exit 1; \
+	            -o $$out --rtl --tree1 --tree2 || exit 1; \
 	    done; \
 	done
 	@echo "Figure 9 RTL written to $(FIG9_DIR)/"
