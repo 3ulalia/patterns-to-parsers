@@ -284,8 +284,8 @@ table1-extract:
 # =============================================================================
 # ARTIFACT EVALUATION — Figures 6 & 7 (make fig6 / make fig7)
 #
-# Fig 6: Simple + Full parser, all DWs, unique config → Quartus → fig6_results.csv
-# Fig 7: Simple + Full parser, all DWs, unique config → Vivado  → fig7_results.csv
+# Fig 6: Simple + Full parser, all DWs, tree config → Quartus → fig6_results.csv
+# Fig 7: Simple + Full parser, all DWs, tree config → Vivado  → fig7_results.csv
 #
 # RTL is shared between both figures (same configs, different tool).
 # Individual steps: fig_6_7-rtl | fig6-synth | fig6-extract  (same for fig7)
@@ -293,27 +293,27 @@ table1-extract:
 
 fig_6_7-rtl:
 	@echo "================================================================"
-	@echo " Figures 6 & 7 — RTL Generation (unique, dw=$(FIG_DWS))"
+	@echo " Figures 6 & 7 — RTL Generation (tree, dw=$(FIG_DWS))"
 	@echo "================================================================"
 	@mkdir -p $(FIG_6_7_DIR)
 	@for dw in $(FIG_DWS); do \
 	    mw=$$(python3 -c "import math; print(math.ceil($(SIMPLE_PARSER_MW)/$$dw)*$$dw)"); \
-	    out=$(FIG_6_7_DIR)/simple_dw$${dw}_unique; \
+	    out=$(FIG_6_7_DIR)/simple_dw$${dw}_tree; \
 	    echo "  simple_parser  dw=$$dw  mw=$$mw  -->  $$out"; \
 	    python3 engine/p4_to_rtl.py \
 	        --p4 p4/simple_parser.p4 \
 	        --dw $$dw --mw $$mw --cm 1 \
-	        --mode unique \
+	        --mode tree \
 	        --o $$out || exit 1; \
 	done
 	@for dw in $(FIG_DWS); do \
 	    mw=$$(python3 -c "import math; print(math.ceil($(FULL_PARSER_MW)/$$dw)*$$dw)"); \
-	    out=$(FIG_6_7_DIR)/full_dw$${dw}_unique; \
+	    out=$(FIG_6_7_DIR)/full_dw$${dw}_tree; \
 	    echo "  full_parser    dw=$$dw  mw=$$mw  -->  $$out"; \
 	    python3 engine/p4_to_rtl.py \
 	        --p4 p4/full_parser.p4 \
 	        --dw $$dw --mw $$mw --cm 1 \
-	        --mode unique \
+	        --mode tree \
 	        --o $$out || exit 1; \
 	done
 	@echo "Figures 6 & 7 RTL written to $(FIG_6_7_DIR)/"
