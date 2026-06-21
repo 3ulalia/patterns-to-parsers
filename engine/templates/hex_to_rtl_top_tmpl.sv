@@ -28,11 +28,11 @@ module {{ module }} (
     {%- endif %}
 
     logic [{{ lookup_dout_outb_list[-1] - 1 }}:0] path_id_out_tmp;
-    logic eop_d1, eop_d2;
-    logic ready_r;
+    (* DONT_TOUCH = "TRUE" *) logic eop_d1, eop_d2;
+    (* DONT_TOUCH = "TRUE" *) logic ready_r;
     {%- if max_id > 0 %}
     // flit_counter: 0 after SOP, increments each valid cycle, saturates at max_id
-    logic [$clog2({{ max_id }}+1)-1:0] flit_counter;
+    (* DONT_TOUCH = "TRUE" *) logic [$clog2({{ max_id }}+1)-1:0] flit_counter;
     {%- endif %}
     {% for port in custom_inputs -%}
     (* DONT_TOUCH = "TRUE" *) logic [{{ port.width - 1 }}:0] {{ port.name }}_r;
@@ -99,7 +99,7 @@ module {{ module }} (
         {%- for mod in active_modules %}
         // Module ID: {{ mod.id }}
         logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }};
-        logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }}_latched;
+        (* DONT_TOUCH = "TRUE" *) logic [{{ mod.dout_bits - 1 }}:0] dout_comparison_{{ mod.id }}_latched;
 
         comparison_logic_{{ mod.id }}
         u_comp_{{ mod.id }} (

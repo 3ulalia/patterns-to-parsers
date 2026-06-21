@@ -22,7 +22,7 @@ module parser_top (
 
 logic [4-1:0] path_id_hex_to_rtl_top;
 logic hex_to_rtl_top_output_valid;
-logic field_valid_r;
+(* DONT_TOUCH = "TRUE" *) logic field_valid_r;
 
 //Hex to rtl top instance
 hex_to_rtl_top
@@ -40,7 +40,7 @@ hex_to_rtl_top
 );
 
 // Flit-counter: resets to 0 on SOP, increments each valid cycle, saturates at num_pipes-1
-logic [$clog2(6)-1:0] flit_counter;
+(* DONT_TOUCH = "TRUE" *) logic [$clog2(6)-1:0] flit_counter;
 
 always_ff @(posedge clk or posedge rst) begin
     if (rst) begin
@@ -54,12 +54,12 @@ always_ff @(posedge clk or posedge rst) begin
 end
 
 // Per-flit latch registers — capture data_i for each flit as it arrives
-logic [127:0] data_i_latched_0;
-logic [127:0] data_i_latched_1;
-logic [127:0] data_i_latched_2;
-logic [127:0] data_i_latched_3;
-logic [127:0] data_i_latched_4;
-logic [127:0] data_i_latched_5;
+(* DONT_TOUCH = "TRUE" *) logic [127:0] data_i_latched_0;
+(* DONT_TOUCH = "TRUE" *) logic [127:0] data_i_latched_1;
+(* DONT_TOUCH = "TRUE" *) logic [127:0] data_i_latched_2;
+(* DONT_TOUCH = "TRUE" *) logic [127:0] data_i_latched_3;
+(* DONT_TOUCH = "TRUE" *) logic [127:0] data_i_latched_4;
+(* DONT_TOUCH = "TRUE" *) logic [127:0] data_i_latched_5;
 always_ff @(posedge clk) begin
     if (data_in_valid && data_in_sop)
         data_i_latched_0 <= data_in;
@@ -87,7 +87,7 @@ end
 
 // Concatenate all latched flits and register once to align with path_id_out
 logic [768-1:0] data_accum;
-logic [768-1:0] data_accum_r;
+(* DONT_TOUCH = "TRUE" *) logic [768-1:0] data_accum_r;
 
 assign data_accum = {
     data_i_latched_0,

@@ -19,8 +19,8 @@ module hex_to_rtl_top (
 );
 
     logic [12:0] path_id_out_tmp;
-    logic eop_d1, eop_d2;
-    logic ready_r;
+    (* DONT_TOUCH = "TRUE" *) logic eop_d1, eop_d2;
+    (* DONT_TOUCH = "TRUE" *) logic ready_r;
     
 
     // EOP delayed two cycles: path_id_out captured on eop_d1 (latches stable),
@@ -55,7 +55,7 @@ module hex_to_rtl_top (
     // Comparison logic
         // Module ID: 0
         logic [46:0] dout_comparison_0;
-        logic [46:0] dout_comparison_0_latched;
+        (* DONT_TOUCH = "TRUE" *) logic [46:0] dout_comparison_0_latched;
 
         comparison_logic_0
         u_comp_0 (

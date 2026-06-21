@@ -20,7 +20,7 @@ module {{ module }} (
 
 logic [{{ path_id_width }}-1:0] path_id_hex_to_rtl_top;
 logic hex_to_rtl_top_output_valid;
-logic field_valid_r;
+(* DONT_TOUCH = "TRUE" *) logic field_valid_r;
 
 //Hex to rtl top instance
 hex_to_rtl_top
@@ -39,7 +39,7 @@ hex_to_rtl_top
 
 // Flit-counter: resets to 0 on SOP, increments each valid cycle, saturates at num_pipes-1
 {%- if num_pipes > 1 %}
-logic [$clog2({{ num_pipes }})-1:0] flit_counter;
+(* DONT_TOUCH = "TRUE" *) logic [$clog2({{ num_pipes }})-1:0] flit_counter;
 
 always_ff @(posedge clk or posedge rst) begin
     if (rst) begin
@@ -55,7 +55,7 @@ end
 
 // Per-flit latch registers — capture data_i for each flit as it arrives
 {%- for i in range(num_pipes) %}
-logic [{{ top_in_width - 1 }}:0] data_i_latched_{{ i }};
+(* DONT_TOUCH = "TRUE" *) logic [{{ top_in_width - 1 }}:0] data_i_latched_{{ i }};
 {%- endfor %}
 
 {%- for i in range(num_pipes) %}
@@ -74,7 +74,7 @@ end
 
 // Concatenate all latched flits and register once to align with path_id_out
 logic [{{ top_in_width * num_pipes }}-1:0] data_accum;
-logic [{{ top_in_width * num_pipes }}-1:0] data_accum_r;
+(* DONT_TOUCH = "TRUE" *) logic [{{ top_in_width * num_pipes }}-1:0] data_accum_r;
 
 assign data_accum = {
     {%- for i in range(num_pipes) %}

@@ -8,7 +8,7 @@ module comparison_logic_0
 (
 input logic clk,
 input logic [1024 - 1 : 0 ] data_in,
-output logic [69 - 1 : 0 ] data_out
+output logic [71 - 1 : 0 ] data_out
 );
 
 
@@ -149,187 +149,142 @@ always_comb begin
 end
 
 
-logic [2:0] output_13;
+logic [1:0] output_13;
 
 always_comb begin
   output_13 = 0;
 
-  if ((data_in[783-:32] == 32'h0A000032)) begin
+  if ((data_in[783-:28] == 28'h0A00003)) begin
     output_13 = 1;
   end
-  else if ((data_in[1023-:32] >= 32'hC0A80100)) begin
-
-    if ((data_in[1023-:32] < 32'hC0A801FF)) begin
-      output_13 = 2;
-    end
-  end
-  else if ((data_in[1023-:32] >= 32'hAC100000)) begin
-
-    if ((data_in[1023-:32] < 32'hAC1FFFFF)) begin
-      output_13 = 3;
-    end
-  end
-  else if ((data_in[783-:32] == 32'h0A000002)) begin
-    output_13 = 4;
-  end
-  else if ((data_in[1023-:32] == 32'hC0A8010A) || (data_in[1023-:32] == 32'hC0A80114) || (data_in[1023-:32] == 32'hC0A8011E)) begin
-    output_13 = 5;
-  end
-  else if ((data_in[783-:32] == 32'h0A000001)) begin
-    output_13 = 6;
+  else if ((data_in[783-:28] == 28'h0A00000)) begin
+    output_13 = 2;
   end
 end
 
 
-logic [0:0] output_14;
+logic [1:0] output_14;
 
 always_comb begin
   output_14 = 0;
 
-  if ((data_in[751-:16] == 16'h0050)) begin
+  if ((data_in[755-:4] == 4'h2)) begin
     output_14 = 1;
+  end
+  else if ((data_in[755-:4] == 4'h1)) begin
+    output_14 = 2;
   end
 end
 
 
-logic [1:0] output_15;
+logic [0:0] output_15;
 
 always_comb begin
   output_15 = 0;
 
-  if ((data_in[735-:8] == 8'h00)) begin
+  if ((data_in[751-:16] == 16'h0050)) begin
     output_15 = 1;
-  end
-  else if ((data_in[735-:8] == 8'h01)) begin
-    output_15 = 2;
   end
 end
 
 
-logic [2:0] output_16;
+logic [0:0] output_16;
 
 always_comb begin
   output_16 = 0;
 
-  if ((data_in[727-:4] == 4'h5)) begin
+  if ((data_in[735-:4] == 4'h0)) begin
     output_16 = 1;
-  end
-  else if ((data_in[727-:4] == 4'hB)) begin
-    output_16 = 2;
-  end
-  else if ((data_in[727-:4] == 4'h1)) begin
-    output_16 = 3;
-  end
-  else if ((data_in[727-:4] == 4'h3)) begin
-    output_16 = 4;
   end
 end
 
 
-logic [2:0] output_17;
+logic [1:0] output_17;
 
 always_comb begin
   output_17 = 0;
 
-  if ((data_in[723-:4] == 4'h0)) begin
+  if ((data_in[731-:4] == 4'h0)) begin
     output_17 = 1;
   end
-  else if ((data_in[723-:4] == 4'hB)) begin
+  else if ((data_in[731-:4] == 4'h1)) begin
     output_17 = 2;
-  end
-  else if ((data_in[723-:4] == 4'h6)) begin
-    output_17 = 3;
-  end
-  else if ((data_in[723-:4] == 4'h5)) begin
-    output_17 = 4;
   end
 end
 
 
-logic [1:0] output_19;
+logic [2:0] output_18;
+
+always_comb begin
+  output_18 = 0;
+
+  if ((data_in[727-:4] == 4'h5)) begin
+    output_18 = 1;
+  end
+  else if ((data_in[727-:4] == 4'hB)) begin
+    output_18 = 2;
+  end
+  else if ((data_in[727-:4] == 4'h1)) begin
+    output_18 = 3;
+  end
+  else if ((data_in[727-:4] == 4'h3)) begin
+    output_18 = 4;
+  end
+end
+
+
+logic [2:0] output_19;
 
 always_comb begin
   output_19 = 0;
 
-  if ((data_in[687-:16] == 16'h0001)) begin
+  if ((data_in[723-:4] == 4'h0)) begin
     output_19 = 1;
   end
-  else if ((data_in[687-:16] == 16'h0800)) begin
+  else if ((data_in[723-:4] == 4'hB)) begin
     output_19 = 2;
   end
-end
-
-
-logic [0:0] output_20;
-
-always_comb begin
-  output_20 = 0;
-
-  if ((data_in[671-:16] == 16'h0000)) begin
-    output_20 = 1;
+  else if ((data_in[723-:4] == 4'h6)) begin
+    output_19 = 3;
+  end
+  else if ((data_in[723-:4] == 4'h5)) begin
+    output_19 = 4;
   end
 end
 
 
-logic [0:0] output_21;
+logic [1:0] output_21;
 
 always_comb begin
   output_21 = 0;
 
-  if ((data_in[655-:4] == 4'h5)) begin
+  if ((data_in[687-:16] == 16'h0001)) begin
     output_21 = 1;
+  end
+  else if ((data_in[687-:16] == 16'h0800)) begin
+    output_21 = 2;
   end
 end
 
 
-logic [2:0] output_23;
+logic [0:0] output_22;
+
+always_comb begin
+  output_22 = 0;
+
+  if ((data_in[671-:16] == 16'h0000)) begin
+    output_22 = 1;
+  end
+end
+
+
+logic [0:0] output_23;
 
 always_comb begin
   output_23 = 0;
 
-  if ((data_in[591-:8] == 8'h47)) begin
+  if ((data_in[655-:4] == 4'h5)) begin
     output_23 = 1;
-  end
-  else if ((data_in[591-:8] == 8'h16)) begin
-    output_23 = 2;
-  end
-  else if ((data_in[591-:8] == 8'h53)) begin
-    output_23 = 3;
-  end
-  else if ((data_in[591-:8] == 8'h48)) begin
-    output_23 = 4;
-  end
-  else if ((data_in[591-:8] == 8'h43)) begin
-    output_23 = 5;
-  end
-  else if ((data_in[591-:8] == 8'hFF)) begin
-    output_23 = 6;
-  end
-end
-
-
-logic [2:0] output_24;
-
-always_comb begin
-  output_24 = 0;
-
-  if ((data_in[583-:8] == 8'h45)) begin
-    output_24 = 1;
-  end
-  else if ((data_in[583-:8] == 8'h03)) begin
-    output_24 = 2;
-  end
-  else if ((data_in[583-:8] == 8'h53)) begin
-    output_24 = 3;
-  end
-  else if ((data_in[583-:8] == 8'h6F)) begin
-    output_24 = 4;
-  end
-  else if ((data_in[583-:8] == 8'h4F)) begin
-    output_24 = 5;
-  end
-  else if ((data_in[583-:8] == 8'hFF)) begin
-    output_24 = 6;
   end
 end
 
@@ -339,26 +294,23 @@ logic [2:0] output_25;
 always_comb begin
   output_25 = 0;
 
-  if ((data_in[575-:8] == 8'h54)) begin
+  if ((data_in[591-:8] == 8'h47)) begin
     output_25 = 1;
   end
-  else if ((data_in[575-:8] == 8'h48)) begin
+  else if ((data_in[591-:8] == 8'h16)) begin
     output_25 = 2;
   end
-  else if ((data_in[575-:8] == 8'h73)) begin
+  else if ((data_in[591-:8] == 8'h53)) begin
     output_25 = 3;
   end
-  else if ((data_in[575-:8] == 8'h4E)) begin
+  else if ((data_in[591-:8] == 8'h48)) begin
     output_25 = 4;
   end
-  else if ((data_in[575-:8] == 8'h01)) begin
+  else if ((data_in[591-:8] == 8'h43)) begin
     output_25 = 5;
   end
-  else if ((data_in[575-:8] == 8'hFF)) begin
+  else if ((data_in[591-:8] == 8'hFF)) begin
     output_25 = 6;
-  end
-  else if ((data_in[575-:8] == 8'h41)) begin
-    output_25 = 7;
   end
 end
 
@@ -368,26 +320,23 @@ logic [2:0] output_26;
 always_comb begin
   output_26 = 0;
 
-  if ((data_in[567-:8] == 8'h20)) begin
+  if ((data_in[583-:8] == 8'h45)) begin
     output_26 = 1;
   end
-  else if ((data_in[567-:8] == 8'h2D)) begin
+  else if ((data_in[583-:8] == 8'h03)) begin
     output_26 = 2;
   end
-  else if ((data_in[567-:8] == 8'h74)) begin
+  else if ((data_in[583-:8] == 8'h53)) begin
     output_26 = 3;
   end
-  else if ((data_in[567-:8] == 8'h4E)) begin
+  else if ((data_in[583-:8] == 8'h6F)) begin
     output_26 = 4;
   end
-  else if ((data_in[567-:8] == 8'hFF)) begin
+  else if ((data_in[583-:8] == 8'h4F)) begin
     output_26 = 5;
   end
-  else if ((data_in[567-:8] == 8'h42)) begin
+  else if ((data_in[583-:8] == 8'hFF)) begin
     output_26 = 6;
-  end
-  else if ((data_in[567-:8] == 8'h41)) begin
-    output_26 = 7;
   end
 end
 
@@ -397,25 +346,25 @@ logic [2:0] output_27;
 always_comb begin
   output_27 = 0;
 
-  if ((data_in[559-:8] == 8'h2F)) begin
+  if ((data_in[575-:8] == 8'h54)) begin
     output_27 = 1;
   end
-  else if ((data_in[559-:8] == 8'h3A)) begin
+  else if ((data_in[575-:8] == 8'h48)) begin
     output_27 = 2;
   end
-  else if ((data_in[559-:8] == 8'h45)) begin
+  else if ((data_in[575-:8] == 8'h73)) begin
     output_27 = 3;
   end
-  else if ((data_in[559-:8] == 8'hFF)) begin
+  else if ((data_in[575-:8] == 8'h4E)) begin
     output_27 = 4;
   end
-  else if ((data_in[559-:8] == 8'h43)) begin
+  else if ((data_in[575-:8] == 8'h01)) begin
     output_27 = 5;
   end
-  else if ((data_in[559-:8] == 8'h42)) begin
+  else if ((data_in[575-:8] == 8'hFF)) begin
     output_27 = 6;
   end
-  else if ((data_in[559-:8] == 8'h41)) begin
+  else if ((data_in[575-:8] == 8'h41)) begin
     output_27 = 7;
   end
 end
@@ -426,17 +375,26 @@ logic [2:0] output_28;
 always_comb begin
   output_28 = 0;
 
-  if ((data_in[551-:8] == 8'h43)) begin
+  if ((data_in[567-:8] == 8'h20)) begin
     output_28 = 1;
   end
-  else if ((data_in[551-:8] == 8'hFF)) begin
+  else if ((data_in[567-:8] == 8'h2D)) begin
     output_28 = 2;
   end
-  else if ((data_in[551-:8] == 8'h44)) begin
+  else if ((data_in[567-:8] == 8'h74)) begin
     output_28 = 3;
   end
-  else if ((data_in[551-:8] == 8'h42)) begin
+  else if ((data_in[567-:8] == 8'h4E)) begin
     output_28 = 4;
+  end
+  else if ((data_in[567-:8] == 8'hFF)) begin
+    output_28 = 5;
+  end
+  else if ((data_in[567-:8] == 8'h42)) begin
+    output_28 = 6;
+  end
+  else if ((data_in[567-:8] == 8'h41)) begin
+    output_28 = 7;
   end
 end
 
@@ -446,53 +404,80 @@ logic [2:0] output_29;
 always_comb begin
   output_29 = 0;
 
-  if ((data_in[543-:8] == 8'h54)) begin
+  if ((data_in[559-:8] == 8'h2F)) begin
     output_29 = 1;
   end
-  else if ((data_in[543-:8] == 8'hFF)) begin
+  else if ((data_in[559-:8] == 8'h3A)) begin
     output_29 = 2;
   end
-  else if ((data_in[543-:8] == 8'h44)) begin
+  else if ((data_in[559-:8] == 8'h45)) begin
     output_29 = 3;
   end
-  else if ((data_in[543-:8] == 8'h43)) begin
+  else if ((data_in[559-:8] == 8'hFF)) begin
     output_29 = 4;
+  end
+  else if ((data_in[559-:8] == 8'h43)) begin
+    output_29 = 5;
+  end
+  else if ((data_in[559-:8] == 8'h42)) begin
+    output_29 = 6;
+  end
+  else if ((data_in[559-:8] == 8'h41)) begin
+    output_29 = 7;
   end
 end
 
 
-logic [1:0] output_30;
+logic [2:0] output_30;
 
 always_comb begin
   output_30 = 0;
 
-  if ((data_in[535-:8] == 8'hFF)) begin
+  if ((data_in[551-:8] == 8'h43)) begin
     output_30 = 1;
   end
-  else if ((data_in[535-:8] == 8'h44)) begin
+  else if ((data_in[551-:8] == 8'hFF)) begin
     output_30 = 2;
+  end
+  else if ((data_in[551-:8] == 8'h44)) begin
+    output_30 = 3;
+  end
+  else if ((data_in[551-:8] == 8'h42)) begin
+    output_30 = 4;
   end
 end
 
 
-logic [0:0] output_31;
+logic [2:0] output_31;
 
 always_comb begin
   output_31 = 0;
 
-  if ((data_in[527-:8] == 8'hFF)) begin
+  if ((data_in[543-:8] == 8'h54)) begin
     output_31 = 1;
+  end
+  else if ((data_in[543-:8] == 8'hFF)) begin
+    output_31 = 2;
+  end
+  else if ((data_in[543-:8] == 8'h44)) begin
+    output_31 = 3;
+  end
+  else if ((data_in[543-:8] == 8'h43)) begin
+    output_31 = 4;
   end
 end
 
 
-logic [0:0] output_32;
+logic [1:0] output_32;
 
 always_comb begin
   output_32 = 0;
 
-  if ((data_in[519-:8] == 8'hFF)) begin
+  if ((data_in[535-:8] == 8'hFF)) begin
     output_32 = 1;
+  end
+  else if ((data_in[535-:8] == 8'h44)) begin
+    output_32 = 2;
   end
 end
 
@@ -502,7 +487,7 @@ logic [0:0] output_33;
 always_comb begin
   output_33 = 0;
 
-  if ((data_in[511-:8] == 8'hFF)) begin
+  if ((data_in[527-:8] == 8'hFF)) begin
     output_33 = 1;
   end
 end
@@ -513,7 +498,7 @@ logic [0:0] output_34;
 always_comb begin
   output_34 = 0;
 
-  if ((data_in[503-:8] == 8'hFF)) begin
+  if ((data_in[519-:8] == 8'hFF)) begin
     output_34 = 1;
   end
 end
@@ -524,7 +509,7 @@ logic [0:0] output_35;
 always_comb begin
   output_35 = 0;
 
-  if ((data_in[495-:8] == 8'hFF)) begin
+  if ((data_in[511-:8] == 8'hFF)) begin
     output_35 = 1;
   end
 end
@@ -535,7 +520,7 @@ logic [0:0] output_36;
 always_comb begin
   output_36 = 0;
 
-  if ((data_in[487-:8] == 8'hFF)) begin
+  if ((data_in[503-:8] == 8'hFF)) begin
     output_36 = 1;
   end
 end
@@ -546,7 +531,7 @@ logic [0:0] output_37;
 always_comb begin
   output_37 = 0;
 
-  if ((data_in[479-:8] == 8'hFF)) begin
+  if ((data_in[495-:8] == 8'hFF)) begin
     output_37 = 1;
   end
 end
@@ -557,7 +542,7 @@ logic [0:0] output_38;
 always_comb begin
   output_38 = 0;
 
-  if ((data_in[471-:8] == 8'hFF)) begin
+  if ((data_in[487-:8] == 8'hFF)) begin
     output_38 = 1;
   end
 end
@@ -568,7 +553,7 @@ logic [0:0] output_39;
 always_comb begin
   output_39 = 0;
 
-  if ((data_in[463-:8] == 8'hFF)) begin
+  if ((data_in[479-:8] == 8'hFF)) begin
     output_39 = 1;
   end
 end
@@ -579,7 +564,7 @@ logic [0:0] output_40;
 always_comb begin
   output_40 = 0;
 
-  if ((data_in[455-:8] == 8'hFF)) begin
+  if ((data_in[471-:8] == 8'hFF)) begin
     output_40 = 1;
   end
 end
@@ -590,7 +575,7 @@ logic [0:0] output_41;
 always_comb begin
   output_41 = 0;
 
-  if ((data_in[447-:8] == 8'hFF)) begin
+  if ((data_in[463-:8] == 8'hFF)) begin
     output_41 = 1;
   end
 end
@@ -601,8 +586,30 @@ logic [0:0] output_42;
 always_comb begin
   output_42 = 0;
 
-  if ((data_in[439-:8] == 8'hFF)) begin
+  if ((data_in[455-:8] == 8'hFF)) begin
     output_42 = 1;
+  end
+end
+
+
+logic [0:0] output_43;
+
+always_comb begin
+  output_43 = 0;
+
+  if ((data_in[447-:8] == 8'hFF)) begin
+    output_43 = 1;
+  end
+end
+
+
+logic [0:0] output_44;
+
+always_comb begin
+  output_44 = 0;
+
+  if ((data_in[439-:8] == 8'hFF)) begin
+    output_44 = 1;
   end
 end
 
@@ -624,11 +631,11 @@ assign data_out = {
     output_15,
     output_16,
     output_17,
+    output_18,
     output_19,
-    output_20,
     output_21,
+    output_22,
     output_23,
-    output_24,
     output_25,
     output_26,
     output_27,
@@ -646,7 +653,9 @@ assign data_out = {
     output_39,
     output_40,
     output_41,
-    output_42
+    output_42,
+    output_43,
+    output_44
 };
 
 endmodule: comparison_logic_0

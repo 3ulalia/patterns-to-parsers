@@ -19,10 +19,10 @@ module hex_to_rtl_top (
 );
 
     logic [6:0] path_id_out_tmp;
-    logic eop_d1, eop_d2;
-    logic ready_r;
+    (* DONT_TOUCH = "TRUE" *) logic eop_d1, eop_d2;
+    (* DONT_TOUCH = "TRUE" *) logic ready_r;
     // flit_counter: 0 after SOP, increments each valid cycle, saturates at max_id
-    logic [$clog2(4+1)-1:0] flit_counter;
+    (* DONT_TOUCH = "TRUE" *) logic [$clog2(4+1)-1:0] flit_counter;
     
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -67,7 +67,7 @@ module hex_to_rtl_top (
     // Comparison logic
         // Module ID: 0
         logic [5:0] dout_comparison_0;
-        logic [5:0] dout_comparison_0_latched;
+        (* DONT_TOUCH = "TRUE" *) logic [5:0] dout_comparison_0_latched;
 
         comparison_logic_0
         u_comp_0 (
@@ -82,7 +82,7 @@ module hex_to_rtl_top (
         end
         // Module ID: 1
         logic [29:0] dout_comparison_1;
-        logic [29:0] dout_comparison_1_latched;
+        (* DONT_TOUCH = "TRUE" *) logic [29:0] dout_comparison_1_latched;
 
         comparison_logic_1
         u_comp_1 (
@@ -99,7 +99,7 @@ module hex_to_rtl_top (
         end
         // Module ID: 2
         logic [9:0] dout_comparison_2;
-        logic [9:0] dout_comparison_2_latched;
+        (* DONT_TOUCH = "TRUE" *) logic [9:0] dout_comparison_2_latched;
 
         comparison_logic_2
         u_comp_2 (
@@ -116,7 +116,7 @@ module hex_to_rtl_top (
         end
         // Module ID: 3
         logic [8:0] dout_comparison_3;
-        logic [8:0] dout_comparison_3_latched;
+        (* DONT_TOUCH = "TRUE" *) logic [8:0] dout_comparison_3_latched;
 
         comparison_logic_3
         u_comp_3 (
@@ -133,7 +133,7 @@ module hex_to_rtl_top (
         end
         // Module ID: 4
         logic [9:0] dout_comparison_4;
-        logic [9:0] dout_comparison_4_latched;
+        (* DONT_TOUCH = "TRUE" *) logic [9:0] dout_comparison_4_latched;
 
         comparison_logic_4
         u_comp_4 (

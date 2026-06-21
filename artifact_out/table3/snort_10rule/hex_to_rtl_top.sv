@@ -19,8 +19,8 @@ module hex_to_rtl_top (
 );
 
     logic [12:0] path_id_out_tmp;
-    logic eop_d1, eop_d2;
-    logic ready_r;
+    (* DONT_TOUCH = "TRUE" *) logic eop_d1, eop_d2;
+    (* DONT_TOUCH = "TRUE" *) logic ready_r;
     
 
     // EOP delayed two cycles: path_id_out captured on eop_d1 (latches stable),
@@ -54,8 +54,8 @@ module hex_to_rtl_top (
 
     // Comparison logic
         // Module ID: 0
-        logic [68:0] dout_comparison_0;
-        logic [68:0] dout_comparison_0_latched;
+        logic [70:0] dout_comparison_0;
+        (* DONT_TOUCH = "TRUE" *) logic [70:0] dout_comparison_0_latched;
 
         comparison_logic_0
         u_comp_0 (
@@ -70,7 +70,7 @@ module hex_to_rtl_top (
         end
 
         // lookup_logic is purely combinational; no extra pipeline stage needed
-        logic [68:0] lookup_input;
+        logic [70:0] lookup_input;
 
         assign lookup_input = {
             dout_comparison_0_latched

@@ -6,34 +6,38 @@
 
 module lookup_logic (
     input  logic clk,
-    input  logic [68:0] data_in,
+    input  logic [70:0] data_in,
     output logic [12:0] data_out
 );
 
 always_comb begin
     data_out = '0;
 
-    if (data_in[68 -: 1] == 1'b1) begin
-        if (data_in[67 -: 2] == 2'b01) begin
-            if (data_in[65 -: 2] == 2'b01) begin
-                if (data_in[63 -: 2] == 2'b01) begin
-                    if (data_in[61 -: 2] == 2'b01) begin
-                        if (data_in[59 -: 2] == 2'b01) begin
-                            if (data_in[57 -: 1] == 1'b1) begin
-                                if (data_in[56 -: 2] == 2'b01) begin
-                                    if (data_in[54 -: 2] == 2'b01) begin
-                                        if (data_in[52 -: 2] == 2'b01) begin
-                                            if (data_in[50 -: 3] == 3'b001) begin
-                                                if (data_in[46 -: 2] == 2'b01) begin
-                                                    if (data_in[44 -: 3] == 3'b001) begin
-                                                        if (data_in[41 -: 3] == 3'b001) begin
-                                                            if (data_in[35 -: 1] == 1'b1) begin
-                                                                if (data_in[34 -: 3] == 3'b001) begin
-                                                                    if (data_in[31 -: 3] == 3'b001) begin
-                                                                        if (data_in[28 -: 3] == 3'b001) begin
-                                                                            if (data_in[25 -: 3] == 3'b001) begin
-                                                                                if (data_in[22 -: 3] == 3'b001) begin
-                                                                                    data_out = 13'b0000000000100;
+    if (data_in[70 -: 1] == 1'b1) begin
+        if (data_in[69 -: 2] == 2'b01) begin
+            if (data_in[67 -: 2] == 2'b01) begin
+                if (data_in[65 -: 2] == 2'b01) begin
+                    if (data_in[63 -: 2] == 2'b01) begin
+                        if (data_in[61 -: 2] == 2'b01) begin
+                            if (data_in[59 -: 1] == 1'b1) begin
+                                if (data_in[58 -: 2] == 2'b01) begin
+                                    if (data_in[56 -: 2] == 2'b01) begin
+                                        if (data_in[54 -: 2] == 2'b01) begin
+                                            if (data_in[52 -: 2] == 2'b01) begin
+                                                if (data_in[50 -: 2] == 2'b01) begin
+                                                    if (data_in[47 -: 1] == 1'b1) begin
+                                                        if (data_in[46 -: 2] == 2'b01) begin
+                                                            if (data_in[44 -: 3] == 3'b001) begin
+                                                                if (data_in[41 -: 3] == 3'b001) begin
+                                                                    if (data_in[35 -: 1] == 1'b1) begin
+                                                                        if (data_in[34 -: 3] == 3'b001) begin
+                                                                            if (data_in[31 -: 3] == 3'b001) begin
+                                                                                if (data_in[28 -: 3] == 3'b001) begin
+                                                                                    if (data_in[25 -: 3] == 3'b001) begin
+                                                                                        if (data_in[22 -: 3] == 3'b001) begin
+                                                                                            data_out = 13'b0000000001010;
+                                                                                        end
+                                                                                    end
                                                                                 end
                                                                             end
                                                                         end
@@ -52,28 +56,50 @@ always_comb begin
                     end
                 end
             end
-            if (data_in[46 -: 2] == 2'b10) begin
-                if (data_in[44 -: 3] == 3'b010) begin
-                    if (data_in[41 -: 3] == 3'b010) begin
-                        if (data_in[35 -: 1] == 1'b1) begin
-                            if (data_in[34 -: 3] == 3'b010) begin
-                                if (data_in[31 -: 3] == 3'b010) begin
-                                    data_out = 13'b0000100000110;
+            if (data_in[47 -: 1] == 1'b1) begin
+                if (data_in[46 -: 2] == 2'b10) begin
+                    if (data_in[44 -: 3] == 3'b010) begin
+                        if (data_in[41 -: 3] == 3'b010) begin
+                            if (data_in[35 -: 1] == 1'b1) begin
+                                if (data_in[34 -: 3] == 3'b010) begin
+                                    if (data_in[31 -: 3] == 3'b010) begin
+                                        data_out = 13'b0000100001001;
+                                        else if (data_in[28 -: 3] == 3'b101) begin
+                                            data_out = 13'b0011100000001;
+                                        end
+                                    end
                                 end
                             end
                         end
                     end
                 end
-            end
-            else if (data_in[46 -: 2] == 2'b01) begin
-                if (data_in[44 -: 3] == 3'b011) begin
-                    if (data_in[41 -: 3] == 3'b011) begin
-                        if (data_in[35 -: 1] == 1'b1) begin
-                            if (data_in[34 -: 3] == 3'b011) begin
-                                if (data_in[31 -: 3] == 3'b011) begin
-                                    if (data_in[28 -: 3] == 3'b010) begin
-                                        if (data_in[25 -: 3] == 3'b010) begin
-                                            data_out = 13'b0001000000011;
+                else if (data_in[46 -: 2] == 2'b01) begin
+                    if (data_in[44 -: 3] == 3'b011) begin
+                        if (data_in[41 -: 3] == 3'b011) begin
+                            if (data_in[35 -: 1] == 1'b1) begin
+                                if (data_in[34 -: 3] == 3'b011) begin
+                                    if (data_in[31 -: 3] == 3'b011) begin
+                                        if (data_in[28 -: 3] == 3'b010) begin
+                                            if (data_in[25 -: 3] == 3'b010) begin
+                                                data_out = 13'b0001000000111;
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    else if (data_in[44 -: 3] == 3'b001) begin
+                        if (data_in[41 -: 3] == 3'b001) begin
+                            if (data_in[35 -: 1] == 1'b1) begin
+                                if (data_in[34 -: 3] == 3'b100) begin
+                                    if (data_in[31 -: 3] == 3'b100) begin
+                                        if (data_in[28 -: 3] == 3'b011) begin
+                                            if (data_in[25 -: 3] == 3'b011) begin
+                                                if (data_in[22 -: 3] == 3'b010) begin
+                                                    data_out = 13'b0001100001000;
+                                                end
+                                            end
                                         end
                                     end
                                 end
@@ -102,7 +128,7 @@ always_comb begin
                     if (data_in[31 -: 3] == 3'b110) begin
                         if (data_in[28 -: 3] == 3'b110) begin
                             if (data_in[25 -: 3] == 3'b101) begin
-                                data_out = 13'b0100000001000;
+                                data_out = 13'b0100000000010;
                             end
                         end
                     end
@@ -111,7 +137,7 @@ always_comb begin
                     if (data_in[28 -: 3] == 3'b110) begin
                         if (data_in[25 -: 3] == 3'b101) begin
                             if (data_in[22 -: 3] == 3'b100) begin
-                                data_out = 13'b0100100001000;
+                                data_out = 13'b0100100000010;
                             end
                         end
                     end
@@ -120,7 +146,7 @@ always_comb begin
                     if (data_in[25 -: 3] == 3'b101) begin
                         if (data_in[22 -: 3] == 3'b100) begin
                             if (data_in[19 -: 3] == 3'b010) begin
-                                data_out = 13'b0101000001000;
+                                data_out = 13'b0101000000010;
                             end
                         end
                     end
@@ -129,7 +155,7 @@ always_comb begin
                     if (data_in[22 -: 3] == 3'b100) begin
                         if (data_in[19 -: 3] == 3'b010) begin
                             if (data_in[16 -: 3] == 3'b010) begin
-                                data_out = 13'b0101100001000;
+                                data_out = 13'b0101100000010;
                             end
                         end
                     end
@@ -138,7 +164,7 @@ always_comb begin
                     if (data_in[19 -: 3] == 3'b010) begin
                         if (data_in[16 -: 3] == 3'b010) begin
                             if (data_in[13 -: 2] == 2'b01) begin
-                                data_out = 13'b0110000001000;
+                                data_out = 13'b0110000000010;
                             end
                         end
                     end
@@ -147,7 +173,7 @@ always_comb begin
                     if (data_in[16 -: 3] == 3'b010) begin
                         if (data_in[13 -: 2] == 2'b01) begin
                             if (data_in[11 -: 1] == 1'b1) begin
-                                data_out = 13'b0110100001000;
+                                data_out = 13'b0110100000010;
                             end
                         end
                     end
@@ -156,7 +182,7 @@ always_comb begin
                     if (data_in[13 -: 2] == 2'b01) begin
                         if (data_in[11 -: 1] == 1'b1) begin
                             if (data_in[10 -: 1] == 1'b1) begin
-                                data_out = 13'b0111000001000;
+                                data_out = 13'b0111000000010;
                             end
                         end
                     end
@@ -165,7 +191,7 @@ always_comb begin
                     if (data_in[11 -: 1] == 1'b1) begin
                         if (data_in[10 -: 1] == 1'b1) begin
                             if (data_in[9 -: 1] == 1'b1) begin
-                                data_out = 13'b0111100001000;
+                                data_out = 13'b0111100000010;
                             end
                         end
                     end
@@ -174,7 +200,7 @@ always_comb begin
                     if (data_in[10 -: 1] == 1'b1) begin
                         if (data_in[9 -: 1] == 1'b1) begin
                             if (data_in[8 -: 1] == 1'b1) begin
-                                data_out = 13'b1000000001000;
+                                data_out = 13'b1000000000010;
                             end
                         end
                     end
@@ -183,7 +209,7 @@ always_comb begin
                     if (data_in[9 -: 1] == 1'b1) begin
                         if (data_in[8 -: 1] == 1'b1) begin
                             if (data_in[7 -: 1] == 1'b1) begin
-                                data_out = 13'b1000100001000;
+                                data_out = 13'b1000100000010;
                             end
                         end
                     end
@@ -192,7 +218,7 @@ always_comb begin
                     if (data_in[8 -: 1] == 1'b1) begin
                         if (data_in[7 -: 1] == 1'b1) begin
                             if (data_in[6 -: 1] == 1'b1) begin
-                                data_out = 13'b1001000001000;
+                                data_out = 13'b1001000000010;
                             end
                         end
                     end
@@ -201,7 +227,7 @@ always_comb begin
                     if (data_in[7 -: 1] == 1'b1) begin
                         if (data_in[6 -: 1] == 1'b1) begin
                             if (data_in[5 -: 1] == 1'b1) begin
-                                data_out = 13'b1001100001000;
+                                data_out = 13'b1001100000010;
                             end
                         end
                     end
@@ -210,7 +236,7 @@ always_comb begin
                     if (data_in[6 -: 1] == 1'b1) begin
                         if (data_in[5 -: 1] == 1'b1) begin
                             if (data_in[4 -: 1] == 1'b1) begin
-                                data_out = 13'b1010000001000;
+                                data_out = 13'b1010000000010;
                             end
                         end
                     end
@@ -219,7 +245,7 @@ always_comb begin
                     if (data_in[5 -: 1] == 1'b1) begin
                         if (data_in[4 -: 1] == 1'b1) begin
                             if (data_in[3 -: 1] == 1'b1) begin
-                                data_out = 13'b1010100001000;
+                                data_out = 13'b1010100000010;
                             end
                         end
                     end
@@ -228,7 +254,7 @@ always_comb begin
                     if (data_in[4 -: 1] == 1'b1) begin
                         if (data_in[3 -: 1] == 1'b1) begin
                             if (data_in[2 -: 1] == 1'b1) begin
-                                data_out = 13'b1011000001000;
+                                data_out = 13'b1011000000010;
                             end
                         end
                     end
@@ -237,7 +263,7 @@ always_comb begin
                     if (data_in[3 -: 1] == 1'b1) begin
                         if (data_in[2 -: 1] == 1'b1) begin
                             if (data_in[1 -: 1] == 1'b1) begin
-                                data_out = 13'b1011100001000;
+                                data_out = 13'b1011100000010;
                             end
                         end
                     end
@@ -246,79 +272,45 @@ always_comb begin
                     if (data_in[2 -: 1] == 1'b1) begin
                         if (data_in[1 -: 1] == 1'b1) begin
                             if (data_in[0 -: 1] == 1'b1) begin
-                                data_out = 13'b1100000001000;
+                                data_out = 13'b1100000000010;
                             end
                         end
                     end
                 end
             end
-            else if (data_in[50 -: 3] == 3'b010) begin
-                if (data_in[46 -: 2] == 2'b01) begin
-                    if (data_in[44 -: 3] == 3'b001) begin
-                        if (data_in[41 -: 3] == 3'b001) begin
-                            if (data_in[35 -: 1] == 1'b1) begin
-                                if (data_in[34 -: 3] == 3'b100) begin
-                                    if (data_in[31 -: 3] == 3'b100) begin
-                                        if (data_in[28 -: 3] == 3'b011) begin
-                                            if (data_in[25 -: 3] == 3'b011) begin
-                                                if (data_in[22 -: 3] == 3'b010) begin
-                                                    data_out = 13'b0001100000001;
+            else if (data_in[52 -: 2] == 2'b10) begin
+                if (data_in[50 -: 2] == 2'b10) begin
+                    if (data_in[48 -: 1] == 1'b1) begin
+                        if (data_in[47 -: 1] == 1'b1) begin
+                            if (data_in[46 -: 2] == 2'b10) begin
+                                if (data_in[44 -: 3] == 3'b010) begin
+                                    if (data_in[41 -: 3] == 3'b010) begin
+                                        if (data_in[35 -: 1] == 1'b1) begin
+                                            if (data_in[28 -: 3] == 3'b111) begin
+                                                if (data_in[25 -: 3] == 3'b110) begin
+                                                    if (data_in[22 -: 3] == 3'b101) begin
+                                                        if (data_in[19 -: 3] == 3'b011) begin
+                                                            data_out = 13'b1100100000011;
+                                                        end
+                                                    end
                                                 end
                                             end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            else if (data_in[50 -: 3] == 3'b101) begin
-                if (data_in[46 -: 2] == 2'b10) begin
-                    if (data_in[44 -: 3] == 3'b010) begin
-                        if (data_in[41 -: 3] == 3'b010) begin
-                            if (data_in[35 -: 1] == 1'b1) begin
-                                if (data_in[34 -: 3] == 3'b010) begin
-                                    if (data_in[31 -: 3] == 3'b010) begin
-                                        if (data_in[28 -: 3] == 3'b101) begin
-                                            data_out = 13'b0011100001001;
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            else if (data_in[50 -: 3] == 3'b110) begin
-                if (data_in[47 -: 1] == 1'b1) begin
-                    if (data_in[46 -: 2] == 2'b10) begin
-                        if (data_in[44 -: 3] == 3'b010) begin
-                            if (data_in[41 -: 3] == 3'b010) begin
-                                if (data_in[35 -: 1] == 1'b1) begin
-                                    if (data_in[28 -: 3] == 3'b111) begin
-                                        if (data_in[25 -: 3] == 3'b110) begin
-                                            if (data_in[22 -: 3] == 3'b101) begin
-                                                if (data_in[19 -: 3] == 3'b011) begin
-                                                    data_out = 13'b1100100000111;
+                                            if (data_in[25 -: 3] == 3'b111) begin
+                                                if (data_in[22 -: 3] == 3'b110) begin
+                                                    if (data_in[19 -: 3] == 3'b001) begin
+                                                        if (data_in[16 -: 3] == 3'b011) begin
+                                                            data_out = 13'b1101000000011;
+                                                        end
+                                                    end
                                                 end
                                             end
-                                        end
-                                    end
-                                    if (data_in[25 -: 3] == 3'b111) begin
-                                        if (data_in[22 -: 3] == 3'b110) begin
-                                            if (data_in[19 -: 3] == 3'b001) begin
-                                                if (data_in[16 -: 3] == 3'b011) begin
-                                                    data_out = 13'b1101000000111;
-                                                end
-                                            end
-                                        end
-                                    end
-                                    if (data_in[22 -: 3] == 3'b111) begin
-                                        if (data_in[19 -: 3] == 3'b100) begin
-                                            if (data_in[16 -: 3] == 3'b100) begin
-                                                if (data_in[13 -: 2] == 2'b10) begin
-                                                    data_out = 13'b1101100000111;
+                                            if (data_in[22 -: 3] == 3'b111) begin
+                                                if (data_in[19 -: 3] == 3'b100) begin
+                                                    if (data_in[16 -: 3] == 3'b100) begin
+                                                        if (data_in[13 -: 2] == 2'b10) begin
+                                                            data_out = 13'b1101100000011;
+                                                        end
+                                                    end
                                                 end
                                             end
                                         end
@@ -330,14 +322,14 @@ always_comb begin
                 end
             end
         end
-        else if (data_in[67 -: 2] == 2'b10) begin
-            if (data_in[50 -: 3] == 3'b011) begin
+        else if (data_in[69 -: 2] == 2'b10) begin
+            if (data_in[47 -: 1] == 1'b1) begin
                 if (data_in[46 -: 2] == 2'b01) begin
                     if (data_in[44 -: 3] == 3'b100) begin
                         if (data_in[41 -: 3] == 3'b100) begin
                             if (data_in[38 -: 2] == 2'b01) begin
                                 if (data_in[36 -: 1] == 1'b1) begin
-                                    data_out = 13'b0010000000010;
+                                    data_out = 13'b0010000000100;
                                 end
                             end
                         end
@@ -345,18 +337,20 @@ always_comb begin
                 end
             end
         end
-        else if (data_in[67 -: 2] == 2'b11) begin
-            if (data_in[65 -: 2] == 2'b10) begin
-                if (data_in[63 -: 2] == 2'b10) begin
-                    if (data_in[61 -: 2] == 2'b10) begin
-                        if (data_in[59 -: 2] == 2'b10) begin
-                            if (data_in[57 -: 1] == 1'b1) begin
-                                if (data_in[56 -: 2] == 2'b10) begin
-                                    if (data_in[54 -: 2] == 2'b10) begin
-                                        if (data_in[52 -: 2] == 2'b10) begin
-                                            if (data_in[50 -: 3] == 3'b100) begin
-                                                if (data_in[38 -: 2] == 2'b10) begin
-                                                    data_out = 13'b0011000001010;
+        else if (data_in[69 -: 2] == 2'b11) begin
+            if (data_in[67 -: 2] == 2'b10) begin
+                if (data_in[65 -: 2] == 2'b10) begin
+                    if (data_in[63 -: 2] == 2'b10) begin
+                        if (data_in[61 -: 2] == 2'b10) begin
+                            if (data_in[59 -: 1] == 1'b1) begin
+                                if (data_in[58 -: 2] == 2'b10) begin
+                                    if (data_in[56 -: 2] == 2'b10) begin
+                                        if (data_in[54 -: 2] == 2'b10) begin
+                                            if (data_in[52 -: 2] == 2'b10) begin
+                                                if (data_in[50 -: 2] == 2'b01) begin
+                                                    if (data_in[38 -: 2] == 2'b10) begin
+                                                        data_out = 13'b0011000000110;
+                                                    end
                                                 end
                                             end
                                         end
