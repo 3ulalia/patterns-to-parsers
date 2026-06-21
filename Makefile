@@ -72,7 +72,7 @@ TABLE1_RESULTS    := table1_results.csv
 
 TABLE1_SIMPLE_DWS := 256 320
 TABLE1_FULL_DWS   := 64 320 512
-TABLE1_MODES      := tree unique
+TABLE1_MODES      := tree
 
 FIG_6_7_DIR := artifact_out/fig_6_7
 FIG_DWS     := 64 128 256 320 512
