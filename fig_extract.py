@@ -141,7 +141,7 @@ def main():
         if not subdir.is_dir():
             continue
         parts = subdir.name.split('_')
-        if len(parts) != 3 or not parts[1].startswith('dw') or parts[2] != 'unique':
+        if len(parts) != 3 or not parts[1].startswith('dw') or parts[2] != 'tree':
             continue
         try:
             dw = int(parts[1][2:])

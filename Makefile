@@ -327,7 +327,7 @@ fig6-synth:
 	@if ! command -v $(QUARTUS) >/dev/null 2>&1; then \
 	    echo "Error: Quartus not found. Set QUARTUS=/path/to/quartus_sh"; exit 1; \
 	fi
-	@for d in $(if $(CONFIG),$(FIG_6_7_DIR)/$(CONFIG),$(FIG_6_7_DIR)/*/); do \
+	@for d in $(if $(CONFIG),$(FIG_6_7_DIR)/$(CONFIG),$(FIG_6_7_DIR)/*_tree/); do \
 	    subdir=$$(cd "$$d" && pwd); \
 	    proj_name=$$(basename $$subdir)_proj; \
 	    echo "------------------------------------------"; \
@@ -637,13 +637,13 @@ clean-sim:
 	find artifact_out/ -type d -name "$(SIM_DIR)" -exec rm -rf {} + 2>/dev/null || true
 
 clean-synth:
-	@echo "Cleaning synthesis projects ($(TOOL)) in $(DIR)..."
+	@echo "Cleaning synthesis projects ($(TOOL)) in artifact_out/..."
 	@if [ "$(TOOL)" = "vivado" ]; then \
-	    find $(DIR) -type d -name "vivado_proj" -exec rm -rf {} + 2>/dev/null || true; \
+	    find artifact_out/ -type d -name "vivado_proj" -exec rm -rf {} + 2>/dev/null || true; \
 	elif [ "$(TOOL)" = "quartus" ]; then \
-	    find $(DIR) -type d -name "quartus_proj" -exec rm -rf {} + 2>/dev/null || true; \
+	    find artifact_out/ -type d -name "quartus_proj" -exec rm -rf {} + 2>/dev/null || true; \
 	fi
-	find $(DIR) -name ".done" -delete 2>/dev/null || true
+	find artifact_out/ -name ".done" -delete 2>/dev/null || true
 
 clean-done:
-	find $(DIR) -name ".done" -delete
+	find artifact_out/ -name ".done" -delete
