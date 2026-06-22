@@ -44,7 +44,16 @@ project_new $proj_name -overwrite
 puts "Using Quartus device: $fpga_device"
 set_global_assignment -name FAMILY "Agilex 5"
 set_global_assignment -name DEVICE $fpga_device
-set_global_assignment -name TOP_LEVEL_ENTITY hex_to_rtl_top
+
+# Top-level: parser_top if it exists in the design dir (fig6), else the
+# classifier hex_to_rtl_top (table3). Quartus is only ever run for these two.
+if { [file exists "$design_dir/parser_top.sv"] } {
+    set top_entity parser_top
+} else {
+    set top_entity hex_to_rtl_top
+}
+puts "Top-level entity: $top_entity"
+set_global_assignment -name TOP_LEVEL_ENTITY $top_entity
 
 # ---------------------------
 # 4. Add Verilog / SV files
@@ -76,15 +85,26 @@ if {[file exists "$design_dir/../../../quartus.sdc"]} {
 }
 
 
-# Virtual pin assignments — avoids physical I/O pin exhaustion on wide-bus designs
+# Virtual pin assignments — avoids physical I/O pin exhaustion on wide-bus designs.
+# Superset of hex_to_rtl_top and parser_top ports (clk/rst kept as real pins);
+# assignments to ports absent from the chosen top are harmless warnings.
 set_instance_assignment -name VIRTUAL_PIN ON -to data_in
 set_instance_assignment -name VIRTUAL_PIN ON -to data_in_sop
 set_instance_assignment -name VIRTUAL_PIN ON -to data_in_eop
 set_instance_assignment -name VIRTUAL_PIN ON -to data_in_valid
+set_instance_assignment -name VIRTUAL_PIN ON -to data_in_ready
+# hex_to_rtl_top-only ports
 set_instance_assignment -name VIRTUAL_PIN ON -to path_id_out_ready
 set_instance_assignment -name VIRTUAL_PIN ON -to path_id_out
 set_instance_assignment -name VIRTUAL_PIN ON -to path_id_out_valid
-set_instance_assignment -name VIRTUAL_PIN ON -to data_in_ready
+# parser_top-only ports
+set_instance_assignment -name VIRTUAL_PIN ON -to field_ready_in
+set_instance_assignment -name VIRTUAL_PIN ON -to field_valid_out
+set_instance_assignment -name VIRTUAL_PIN ON -to dip_out
+set_instance_assignment -name VIRTUAL_PIN ON -to dp_out
+set_instance_assignment -name VIRTUAL_PIN ON -to prot_out
+set_instance_assignment -name VIRTUAL_PIN ON -to sip_out
+set_instance_assignment -name VIRTUAL_PIN ON -to sp_out
 
 # ---------------------------
 # 5. Finalize
