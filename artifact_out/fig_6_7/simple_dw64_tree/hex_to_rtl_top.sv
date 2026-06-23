@@ -4,7 +4,12 @@
 // Description: Top module, connecting comparison and lookup logic
 //==================================================================================
 
-module hex_to_rtl_top (
+module hex_to_rtl_top #(
+    // SKID_EN=1: instantiate the input AXI skid buffer (default — e.g. when this
+    // is the top-level module). SKID_EN=0: bypass it (e.g. when parser_top owns
+    // the skid). When bypassed the RTL is functionally identical to the original.
+    parameter bit SKID_EN = 1
+) (
     input  logic    clk,
     input  logic    rst,
     input  logic [63:0]  data_in,
@@ -23,12 +28,45 @@ module hex_to_rtl_top (
     (* DONT_TOUCH = "TRUE" *) logic ready_r;
     // flit_counter: 0 after SOP, increments each valid cycle, saturates at max_id
     (* DONT_TOUCH = "TRUE" *) logic [$clog2(7+1)-1:0] flit_counter;
-    
+    // ---- Input AXI skid buffer (SKID_EN=1) or direct passthrough (SKID_EN=0) ----
+    // The core comparison/lookup pipeline always consumes the post-skid stream.
+    logic [63:0] core_data_in;
+    logic core_data_in_sop, core_data_in_eop, core_data_in_valid;
+    logic core_data_out_ready;
+
+    // Existing ready logic, computed on the post-skid stream. Drives the skid's
+    // downstream-ready input (SKID_EN=1) or data_in_ready directly (SKID_EN=0).
+    assign core_data_out_ready = (core_data_in_valid && core_data_in_sop && path_id_out_ready) || ready_r;
+
+    generate
+    if (SKID_EN) begin : g_input_skid
+        axi_skid #(.WIDTH(64)) u_input_skid (
+            .clk            (clk),
+            .rst            (rst),
+            .data_in        (data_in),
+            .data_in_sop    (data_in_sop),
+            .data_in_eop    (data_in_eop),
+            .data_in_valid  (data_in_valid),
+            .data_in_ready  (data_in_ready),
+            .data_out       (core_data_in),
+            .data_out_sop   (core_data_in_sop),
+            .data_out_eop   (core_data_in_eop),
+            .data_out_valid (core_data_in_valid),
+            .data_out_ready (core_data_out_ready)
+        );
+    end else begin : g_no_skid
+        assign core_data_in       = data_in;
+        assign core_data_in_sop   = data_in_sop;
+        assign core_data_in_eop   = data_in_eop;
+        assign core_data_in_valid = data_in_valid;
+        assign data_in_ready      = core_data_out_ready;
+    end
+    endgenerate
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             flit_counter <= '0;
-        end else if (data_in_valid) begin
-            if (data_in_sop)
+        end else if (core_data_in_valid) begin
+            if (core_data_in_sop)
                 flit_counter <= '0;
             else if (flit_counter < 7)
                 flit_counter <= flit_counter + 1'b1;
@@ -42,7 +80,7 @@ module hex_to_rtl_top (
             eop_d1 <= '0;
             eop_d2 <= '0;
         end else begin
-            eop_d1 <= data_in_valid && data_in_eop;
+            eop_d1 <= core_data_in_valid && core_data_in_eop;
             eop_d2 <= eop_d1;
         end
     end
@@ -57,10 +95,11 @@ module hex_to_rtl_top (
     always_ff @(posedge clk or posedge rst) begin
         if (rst)
             ready_r <= '0;
-        else if (data_in_valid && data_in_sop)
+        else if (core_data_in_valid && core_data_in_sop)
             ready_r <= path_id_out_ready;
     end
-    assign data_in_ready = (data_in_valid && data_in_sop && path_id_out_ready) || ready_r;
+    // data_in_ready is driven by the skid handshake (SKID_EN=1) or by
+    // core_data_out_ready in the g_no_skid generate branch (SKID_EN=0).
 
     
 
@@ -72,14 +111,14 @@ module hex_to_rtl_top (
         comparison_logic_1
         u_comp_1 (
             .clk        (clk),
-            .data_in    (data_in),
+            .data_in    (core_data_in),
             .data_out   (dout_comparison_1)
         );
         // SOP reset clears stale value; capture when flit 1 is on data_in
         always_ff @(posedge clk) begin
-            if (data_in_valid && data_in_sop)
+            if (core_data_in_valid && core_data_in_sop)
                 dout_comparison_1_latched <= '0;
-            else if (data_in_valid && (flit_counter == 0))
+            else if (core_data_in_valid && (flit_counter == 0))
                 dout_comparison_1_latched <= dout_comparison_1;
         end
         // Module ID: 2
@@ -89,14 +128,14 @@ module hex_to_rtl_top (
         comparison_logic_2
         u_comp_2 (
             .clk        (clk),
-            .data_in    (data_in),
+            .data_in    (core_data_in),
             .data_out   (dout_comparison_2)
         );
         // SOP reset clears stale value; capture when flit 2 is on data_in
         always_ff @(posedge clk) begin
-            if (data_in_valid && data_in_sop)
+            if (core_data_in_valid && core_data_in_sop)
                 dout_comparison_2_latched <= '0;
-            else if (data_in_valid && (flit_counter == 1))
+            else if (core_data_in_valid && (flit_counter == 1))
                 dout_comparison_2_latched <= dout_comparison_2;
         end
         // Module ID: 6
@@ -106,14 +145,14 @@ module hex_to_rtl_top (
         comparison_logic_6
         u_comp_6 (
             .clk        (clk),
-            .data_in    (data_in),
+            .data_in    (core_data_in),
             .data_out   (dout_comparison_6)
         );
         // SOP reset clears stale value; capture when flit 6 is on data_in
         always_ff @(posedge clk) begin
-            if (data_in_valid && data_in_sop)
+            if (core_data_in_valid && core_data_in_sop)
                 dout_comparison_6_latched <= '0;
-            else if (data_in_valid && (flit_counter == 5))
+            else if (core_data_in_valid && (flit_counter == 5))
                 dout_comparison_6_latched <= dout_comparison_6;
         end
         // Module ID: 7
@@ -123,14 +162,14 @@ module hex_to_rtl_top (
         comparison_logic_7
         u_comp_7 (
             .clk        (clk),
-            .data_in    (data_in),
+            .data_in    (core_data_in),
             .data_out   (dout_comparison_7)
         );
         // SOP reset clears stale value; capture when flit 7 is on data_in
         always_ff @(posedge clk) begin
-            if (data_in_valid && data_in_sop)
+            if (core_data_in_valid && core_data_in_sop)
                 dout_comparison_7_latched <= '0;
-            else if (data_in_valid && (flit_counter == 6))
+            else if (core_data_in_valid && (flit_counter == 6))
                 dout_comparison_7_latched <= dout_comparison_7;
         end
 

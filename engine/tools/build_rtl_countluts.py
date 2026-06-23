@@ -464,6 +464,10 @@ def build_top_rtl(
 
     jj_render("hex_to_rtl_top_tmpl.sv", module_name, context, outfile_dir)
 
+    # Emit the (static, parameterized) AXI skid buffer module. It is instantiated
+    # inside hex_to_rtl_top when SKID_EN=1, and by parser_top when it owns the skid.
+    jj_render("axi_skid.sv", "axi_skid", {}, outfile_dir)
+
 def build_toptb_rtl(
     input_lines,
     active_modules,

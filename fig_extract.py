@@ -108,12 +108,12 @@ def extract_quartus(subdir):
         with fit_file.open(encoding='latin-1') as f:
             for line in f:
                 line = line.strip()
-                m = re.match(r"; Logic utilization \(in ALMs\)\s*;\s*(\d+)\s*/", line)
+                m = re.match(r"; Logic utilization \(in ALMs\)\s*;\s*([\d,]+)\s*/", line)
                 if m:
-                    alm = int(m.group(1))
-                m = re.match(r"; Dedicated logic registers\s*;\s*(\d+)", line)
+                    alm = int(m.group(1).replace(',', ''))
+                m = re.match(r"; Dedicated logic registers\s*;\s*([\d,]+)", line)
                 if m:
-                    ff = int(m.group(1))
+                    ff = int(m.group(1).replace(',', ''))
     else:
         print(f"Warning: {fit_file} not found")
 

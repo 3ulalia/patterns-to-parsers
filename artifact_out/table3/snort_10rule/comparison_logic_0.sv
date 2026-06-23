@@ -8,7 +8,7 @@ module comparison_logic_0
 (
 input logic clk,
 input logic [1024 - 1 : 0 ] data_in,
-output logic [71 - 1 : 0 ] data_out
+output logic [69 - 1 : 0 ] data_out
 );
 
 
@@ -45,10 +45,10 @@ logic [1:0] output_5;
 always_comb begin
   output_5 = 0;
 
-  if ((data_in[815-:4] == 4'hC)) begin
+  if ((data_in[815-:8] == 8'hC0)) begin
     output_5 = 1;
   end
-  else if ((data_in[815-:4] == 4'h0)) begin
+  else if ((data_in[815-:8] == 8'h0A)) begin
     output_5 = 2;
   end
 end
@@ -59,10 +59,10 @@ logic [1:0] output_6;
 always_comb begin
   output_6 = 0;
 
-  if ((data_in[811-:4] == 4'h0)) begin
+  if ((data_in[807-:4] == 4'hA)) begin
     output_6 = 1;
   end
-  else if ((data_in[811-:4] == 4'hA)) begin
+  else if ((data_in[807-:4] == 4'h0)) begin
     output_6 = 2;
   end
 end
@@ -73,36 +73,36 @@ logic [1:0] output_7;
 always_comb begin
   output_7 = 0;
 
-  if ((data_in[807-:4] == 4'hA)) begin
+  if ((data_in[803-:4] == 4'h8)) begin
     output_7 = 1;
   end
-  else if ((data_in[807-:4] == 4'h0)) begin
+  else if ((data_in[803-:4] == 4'h0)) begin
     output_7 = 2;
   end
 end
 
 
-logic [1:0] output_8;
+logic [0:0] output_8;
 
 always_comb begin
   output_8 = 0;
 
-  if ((data_in[803-:4] == 4'h8)) begin
+  if ((data_in[799-:4] == 4'h0)) begin
     output_8 = 1;
-  end
-  else if ((data_in[803-:4] == 4'h0)) begin
-    output_8 = 2;
   end
 end
 
 
-logic [0:0] output_9;
+logic [1:0] output_9;
 
 always_comb begin
   output_9 = 0;
 
-  if ((data_in[799-:4] == 4'h0)) begin
+  if ((data_in[795-:4] == 4'h1)) begin
     output_9 = 1;
+  end
+  else if ((data_in[795-:4] == 4'h0)) begin
+    output_9 = 2;
   end
 end
 
@@ -112,10 +112,10 @@ logic [1:0] output_10;
 always_comb begin
   output_10 = 0;
 
-  if ((data_in[795-:4] == 4'h1)) begin
+  if ((data_in[791-:4] == 4'h6)) begin
     output_10 = 1;
   end
-  else if ((data_in[795-:4] == 4'h0)) begin
+  else if ((data_in[791-:4] == 4'h0)) begin
     output_10 = 2;
   end
 end
@@ -126,39 +126,33 @@ logic [1:0] output_11;
 always_comb begin
   output_11 = 0;
 
-  if ((data_in[791-:4] == 4'h6)) begin
+  if ((data_in[787-:4] == 4'h4)) begin
     output_11 = 1;
   end
-  else if ((data_in[791-:4] == 4'h0)) begin
+  else if ((data_in[787-:4] == 4'h1)) begin
     output_11 = 2;
   end
 end
 
 
-logic [1:0] output_12;
+logic [0:0] output_12;
 
 always_comb begin
   output_12 = 0;
 
-  if ((data_in[787-:4] == 4'h4)) begin
+  if ((data_in[783-:12] == 12'h0A0)) begin
     output_12 = 1;
-  end
-  else if ((data_in[787-:4] == 4'h1)) begin
-    output_12 = 2;
   end
 end
 
 
-logic [1:0] output_13;
+logic [0:0] output_13;
 
 always_comb begin
   output_13 = 0;
 
-  if ((data_in[783-:28] == 28'h0A00003)) begin
+  if ((data_in[771-:4] == 4'h0)) begin
     output_13 = 1;
-  end
-  else if ((data_in[783-:28] == 28'h0A00000)) begin
-    output_13 = 2;
   end
 end
 
@@ -168,11 +162,14 @@ logic [1:0] output_14;
 always_comb begin
   output_14 = 0;
 
-  if ((data_in[755-:4] == 4'h2)) begin
+  if ((data_in[767-:16] == 16'h0032)) begin
     output_14 = 1;
   end
-  else if ((data_in[755-:4] == 4'h1)) begin
+  else if ((data_in[767-:16] == 16'h0002)) begin
     output_14 = 2;
+  end
+  else if ((data_in[767-:16] == 16'h0001)) begin
+    output_14 = 3;
   end
 end
 

@@ -35,13 +35,13 @@ if fit_file.exists():
         for line in f:
             line = line.strip()
             # Match logic utilization (ALMs)
-            match_alm = re.match(r"; Logic utilization \(in ALMs\)\s*;\s*(\d+)\s*/", line)
+            match_alm = re.match(r"; Logic utilization \(in ALMs\)\s*;\s*([\d,]+)\s*/", line)
             if match_alm:
-                alm = int(match_alm.group(1))
+                alm = int(match_alm.group(1).replace(',', ''))
             # Match Total registers (FFs)
-            match_ff = re.match(r"; Dedicated logic registers\s*;\s*(\d+)", line)
+            match_ff = re.match(r"; Dedicated logic registers\s*;\s*([\d,]+)", line)
             if match_ff:
-                ff = int(match_ff.group(1))
+                ff = int(match_ff.group(1).replace(',', ''))
 else:
     print(f"Warning: {fit_file} not found")
 

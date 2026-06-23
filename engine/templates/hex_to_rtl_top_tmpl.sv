@@ -4,7 +4,12 @@
 // Description: Top module, connecting comparison and lookup logic
 //==================================================================================
 
-module {{ module }} (
+module {{ module }} #(
+    // SKID_EN=1: instantiate the input AXI skid buffer (default — e.g. when this
+    // is the top-level module). SKID_EN=0: bypass it (e.g. when parser_top owns
+    // the skid). When bypassed the RTL is functionally identical to the original.
+    parameter bit SKID_EN = 1
+) (
     input  logic    clk,
     input  logic    rst,
     {% for port in custom_inputs -%}
@@ -38,12 +43,47 @@ module {{ module }} (
     (* DONT_TOUCH = "TRUE" *) logic [{{ port.width - 1 }}:0] {{ port.name }}_r;
     {% endfor -%}
 
+    // ---- Input AXI skid buffer (SKID_EN=1) or direct passthrough (SKID_EN=0) ----
+    // The core comparison/lookup pipeline always consumes the post-skid stream.
+    logic [{{ active_modules[0].din_bits - 1 }}:0] core_data_in;
+    logic core_data_in_sop, core_data_in_eop, core_data_in_valid;
+    logic core_data_out_ready;
+
+    // Existing ready logic, computed on the post-skid stream. Drives the skid's
+    // downstream-ready input (SKID_EN=1) or data_in_ready directly (SKID_EN=0).
+    assign core_data_out_ready = (core_data_in_valid && core_data_in_sop && path_id_out_ready) || ready_r;
+
+    generate
+    if (SKID_EN) begin : g_input_skid
+        axi_skid #(.WIDTH({{ active_modules[0].din_bits }})) u_input_skid (
+            .clk            (clk),
+            .rst            (rst),
+            .data_in        (data_in),
+            .data_in_sop    (data_in_sop),
+            .data_in_eop    (data_in_eop),
+            .data_in_valid  (data_in_valid),
+            .data_in_ready  (data_in_ready),
+            .data_out       (core_data_in),
+            .data_out_sop   (core_data_in_sop),
+            .data_out_eop   (core_data_in_eop),
+            .data_out_valid (core_data_in_valid),
+            .data_out_ready (core_data_out_ready)
+        );
+    end else begin : g_no_skid
+        assign core_data_in       = data_in;
+        assign core_data_in_sop   = data_in_sop;
+        assign core_data_in_eop   = data_in_eop;
+        assign core_data_in_valid = data_in_valid;
+        assign data_in_ready      = core_data_out_ready;
+    end
+    endgenerate
+
     {%- if max_id > 0 %}
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             flit_counter <= '0;
-        end else if (data_in_valid) begin
-            if (data_in_sop)
+        end else if (core_data_in_valid) begin
+            if (core_data_in_sop)
                 flit_counter <= '0;
             else if (flit_counter < {{ max_id }})
                 flit_counter <= flit_counter + 1'b1;
@@ -58,7 +98,7 @@ module {{ module }} (
             eop_d1 <= '0;
             eop_d2 <= '0;
         end else begin
-            eop_d1 <= data_in_valid && data_in_eop;
+            eop_d1 <= core_data_in_valid && core_data_in_eop;
             eop_d2 <= eop_d1;
         end
     end
@@ -73,10 +113,11 @@ module {{ module }} (
     always_ff @(posedge clk or posedge rst) begin
         if (rst)
             ready_r <= '0;
-        else if (data_in_valid && data_in_sop)
+        else if (core_data_in_valid && core_data_in_sop)
             ready_r <= path_id_out_ready;
     end
-    assign data_in_ready = (data_in_valid && data_in_sop && path_id_out_ready) || ready_r;
+    // data_in_ready is driven by the skid handshake (SKID_EN=1) or by
+    // core_data_out_ready in the g_no_skid generate branch (SKID_EN=0).
 
     {% if custom_inputs %}
     // Custom input pipeline registers
@@ -85,7 +126,7 @@ module {{ module }} (
     {% for port in custom_inputs -%}
             {{ port.name }}_r <= '0;
     {% endfor %}
-        end else if (data_in_valid) begin
+        end else if (core_data_in_valid) begin
     {% for port in custom_inputs -%}
             {{ port.name }}_r <= {{ port.name }};
     {% endfor %}
@@ -107,22 +148,22 @@ module {{ module }} (
             {% for port in custom_inputs -%}
             .{{ port.name }} ({{ port.name }}_r),
             {% endfor -%}
-            .data_in    (data_in),
+            .data_in    (core_data_in),
             .data_out   (dout_comparison_{{ mod.id }})
         );
 
         {%- if mod.id == 0 %}
         // Module 0: flit 0 is on data_in at SOP — capture at SOP, no reset needed
         always_ff @(posedge clk) begin
-            if (data_in_valid && data_in_sop)
+            if (core_data_in_valid && core_data_in_sop)
                 dout_comparison_{{ mod.id }}_latched <= dout_comparison_{{ mod.id }};
         end
         {%- else %}
         // SOP reset clears stale value; capture when flit {{ mod.id }} is on data_in
         always_ff @(posedge clk) begin
-            if (data_in_valid && data_in_sop)
+            if (core_data_in_valid && core_data_in_sop)
                 dout_comparison_{{ mod.id }}_latched <= '0;
-            else if (data_in_valid && (flit_counter == {{ mod.id - 1 }}))
+            else if (core_data_in_valid && (flit_counter == {{ mod.id - 1 }}))
                 dout_comparison_{{ mod.id }}_latched <= dout_comparison_{{ mod.id }};
         end
         {%- endif %}
@@ -157,7 +198,7 @@ module {{ module }} (
             {% for port in custom_inputs -%}
             .{{ port.name }} ({{ port.name }}_r),
             {% endfor -%}
-            .data_in    (data_in),
+            .data_in    (core_data_in),
             .data_out   (path_id_out_tmp)
         );
     {% endif %}

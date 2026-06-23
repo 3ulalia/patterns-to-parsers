@@ -24,19 +24,41 @@ logic [4-1:0] path_id_hex_to_rtl_top;
 logic hex_to_rtl_top_output_valid;
 (* DONT_TOUCH = "TRUE" *) logic field_valid_r;
 
-//Hex to rtl top instance
-hex_to_rtl_top
+// ---- Input AXI skid buffer ----
+// parser_top owns the skid, so the wrapped hex_to_rtl_top is built with
+// SKID_EN=0. All downstream consumers use the post-skid stream (core_*).
+logic [63:0] core_data_in;
+logic core_data_in_sop, core_data_in_eop, core_data_in_valid;
+logic comp_lookup_ready;   // hex_to_rtl_top's data_in_ready (downstream ready)
+
+axi_skid #(.WIDTH(64)) u_input_skid (
+    .clk            (clk),
+    .rst            (rst),
+    .data_in        (data_in),
+    .data_in_sop    (data_in_sop),
+    .data_in_eop    (data_in_eop),
+    .data_in_valid  (data_in_valid),
+    .data_in_ready  (data_in_ready),
+    .data_out       (core_data_in),
+    .data_out_sop   (core_data_in_sop),
+    .data_out_eop   (core_data_in_eop),
+    .data_out_valid (core_data_in_valid),
+    .data_out_ready (comp_lookup_ready)
+);
+
+//Hex to rtl top instance (skid disabled — owned by parser_top)
+hex_to_rtl_top #(.SKID_EN(0))
   u_comp_lookup (
     .clk              (clk),
     .rst              (rst),
-    .data_in          (data_in),
-    .data_in_sop      (data_in_sop),
-    .data_in_eop      (data_in_eop),
-    .data_in_valid    (data_in_valid),
+    .data_in          (core_data_in),
+    .data_in_sop      (core_data_in_sop),
+    .data_in_eop      (core_data_in_eop),
+    .data_in_valid    (core_data_in_valid),
     .path_id_out_ready(field_ready_in),
     .path_id_out      (path_id_hex_to_rtl_top),
     .path_id_out_valid(hex_to_rtl_top_output_valid),
-    .data_in_ready    (data_in_ready)
+    .data_in_ready    (comp_lookup_ready)
 );
 
 // Flit-counter: resets to 0 on SOP, increments each valid cycle, saturates at num_pipes-1
@@ -45,8 +67,8 @@ hex_to_rtl_top
 always_ff @(posedge clk or posedge rst) begin
     if (rst) begin
         flit_counter <= '0;
-    end else if (data_in_valid) begin
-        if (data_in_sop)
+    end else if (core_data_in_valid) begin
+        if (core_data_in_sop)
             flit_counter <= '0;
         else if (flit_counter < 11)
             flit_counter <= flit_counter + 1'b1;
@@ -67,52 +89,52 @@ end
 (* DONT_TOUCH = "TRUE" *) logic [63:0] data_i_latched_10;
 (* DONT_TOUCH = "TRUE" *) logic [63:0] data_i_latched_11;
 always_ff @(posedge clk) begin
-    if (data_in_valid && data_in_sop)
-        data_i_latched_0 <= data_in;
+    if (core_data_in_valid && core_data_in_sop)
+        data_i_latched_0 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 0))
-        data_i_latched_1 <= data_in;
+    if (core_data_in_valid && (flit_counter == 0))
+        data_i_latched_1 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 1))
-        data_i_latched_2 <= data_in;
+    if (core_data_in_valid && (flit_counter == 1))
+        data_i_latched_2 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 2))
-        data_i_latched_3 <= data_in;
+    if (core_data_in_valid && (flit_counter == 2))
+        data_i_latched_3 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 3))
-        data_i_latched_4 <= data_in;
+    if (core_data_in_valid && (flit_counter == 3))
+        data_i_latched_4 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 4))
-        data_i_latched_5 <= data_in;
+    if (core_data_in_valid && (flit_counter == 4))
+        data_i_latched_5 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 5))
-        data_i_latched_6 <= data_in;
+    if (core_data_in_valid && (flit_counter == 5))
+        data_i_latched_6 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 6))
-        data_i_latched_7 <= data_in;
+    if (core_data_in_valid && (flit_counter == 6))
+        data_i_latched_7 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 7))
-        data_i_latched_8 <= data_in;
+    if (core_data_in_valid && (flit_counter == 7))
+        data_i_latched_8 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 8))
-        data_i_latched_9 <= data_in;
+    if (core_data_in_valid && (flit_counter == 8))
+        data_i_latched_9 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 9))
-        data_i_latched_10 <= data_in;
+    if (core_data_in_valid && (flit_counter == 9))
+        data_i_latched_10 <= core_data_in;
 end
 always_ff @(posedge clk) begin
-    if (data_in_valid && (flit_counter == 10))
-        data_i_latched_11 <= data_in;
+    if (core_data_in_valid && (flit_counter == 10))
+        data_i_latched_11 <= core_data_in;
 end
 
 // Concatenate all latched flits and register once to align with path_id_out
