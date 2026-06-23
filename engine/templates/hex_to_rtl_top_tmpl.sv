@@ -35,6 +35,10 @@ module {{ module }} #(
     logic [{{ lookup_dout_outb_list[-1] - 1 }}:0] path_id_out_tmp;
     (* DONT_TOUCH = "TRUE" *) logic eop_d1, eop_d2;
     (* DONT_TOUCH = "TRUE" *) logic ready_r;
+    // Registered path_id_out_ready: takes the input off the combinational ready
+    // path (better input timing). Trade-off: backpressure is seen one cycle late,
+    // so downstream must tolerate one extra in-flight output (almost-full FIFO).
+    (* DONT_TOUCH = "TRUE" *) logic path_id_out_ready_q;
     {%- if max_id > 0 %}
     // flit_counter: 0 after SOP, increments each valid cycle, saturates at max_id
     (* DONT_TOUCH = "TRUE" *) logic [$clog2({{ max_id }}+1)-1:0] flit_counter;
@@ -49,9 +53,17 @@ module {{ module }} #(
     logic core_data_in_sop, core_data_in_eop, core_data_in_valid;
     logic core_data_out_ready;
 
+    // Register the downstream ready input.
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst)
+            path_id_out_ready_q <= '0;
+        else
+            path_id_out_ready_q <= path_id_out_ready;
+    end
+
     // Existing ready logic, computed on the post-skid stream. Drives the skid's
     // downstream-ready input (SKID_EN=1) or data_in_ready directly (SKID_EN=0).
-    assign core_data_out_ready = (core_data_in_valid && core_data_in_sop && path_id_out_ready) || ready_r;
+    assign core_data_out_ready = (core_data_in_valid && core_data_in_sop && path_id_out_ready_q) || ready_r;
 
     generate
     if (SKID_EN) begin : g_input_skid
@@ -114,7 +126,7 @@ module {{ module }} #(
         if (rst)
             ready_r <= '0;
         else if (core_data_in_valid && core_data_in_sop)
-            ready_r <= path_id_out_ready;
+            ready_r <= path_id_out_ready_q;
     end
     // data_in_ready is driven by the skid handshake (SKID_EN=1) or by
     // core_data_out_ready in the g_no_skid generate branch (SKID_EN=0).
