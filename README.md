@@ -1,4 +1,4 @@
-# From Patterns to Parsers: Automatic Generation of Synthesizable SystemVerilog
+# From Patterns to Parsers: Automatic Generation of Synthesizable SystemVerilog Parsers
 
 Automatically generates synthesizable SystemVerilog parsers from high-level specifications — P4 programs, synthetic pattern tables, or Snort rules — without writing RTL by hand.
 
