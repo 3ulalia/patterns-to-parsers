@@ -278,7 +278,7 @@ table1-extract:
 	@echo "================================================================"
 	@echo " Table 1 — Extracting results → $(TABLE1_RESULTS)"
 	@echo "================================================================"
-	@python3 table1_extract.py $(TABLE1_DIR) $(TABLE1_RESULTS)
+	@python3 artifact_evaluation/table1_extract.py $(TABLE1_DIR) $(TABLE1_RESULTS)
 
 
 # =============================================================================
@@ -343,7 +343,7 @@ fig6-extract:
 	@echo "================================================================"
 	@echo " Figure 6 — Extracting results → $(FIG6_CSV)"
 	@echo "================================================================"
-	@python3 fig_extract.py $(FIG_6_7_DIR) $(FIG6_CSV) --tool quartus
+	@python3 artifact_evaluation/fig_extract.py $(FIG_6_7_DIR) $(FIG6_CSV) --tool quartus
 
 fig7: fig_6_7-rtl fig7-synth fig7-extract
 
@@ -369,7 +369,7 @@ fig7-extract:
 	@echo "================================================================"
 	@echo " Figure 7 — Extracting results → $(FIG7_CSV)"
 	@echo "================================================================"
-	@python3 fig_extract.py $(FIG_6_7_DIR) $(FIG7_CSV) --tool vivado
+	@python3 artifact_evaluation/fig_extract.py $(FIG_6_7_DIR) $(FIG7_CSV) --tool vivado
 
 
 # =============================================================================
@@ -427,7 +427,7 @@ table3-extract:
 	@echo "================================================================"
 	@echo " Table 3 — Extracting results → $(TABLE3_CSV)"
 	@echo "================================================================"
-	@python3 table3_extract.py $(TABLE3_DESIGN) $(TABLE3_CSV)
+	@python3 artifact_evaluation/table3_extract.py $(TABLE3_DESIGN) $(TABLE3_CSV)
 
 
 # =============================================================================
@@ -487,7 +487,7 @@ fig9-extract:
 	@echo "================================================================"
 	@echo " Figure 9 — Extracting results → $(FIG9_CSV)"
 	@echo "================================================================"
-	@python3 fig9_extract.py $(FIG9_DIR) $(FIG9_CSV)
+	@python3 artifact_evaluation/fig9_extract.py $(FIG9_DIR) $(FIG9_CSV)
 
 
 # =============================================================================

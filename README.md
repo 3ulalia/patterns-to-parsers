@@ -1,6 +1,131 @@
 # From Patterns to Parsers: Automatic Generation of Synthesizable SystemVerilog Parsers
 
+[![Paper](https://img.shields.io/badge/arXiv-2607.16058-b31b1b.svg)](https://arxiv.org/abs/2607.16058)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Automatically generates synthesizable SystemVerilog parsers from high-level specifications — P4 programs, synthetic pattern tables, or Snort rules — without writing RTL by hand.
+
+📄 **Paper:** [*From Patterns to Parsers: Automatic Generation of Efficient Hardware Parsers for FPGAs*](https://arxiv.org/abs/2607.16058) (arXiv:2607.16058)
+🔬 **Reproducing the paper?** See [`artifact_evaluation/`](artifact_evaluation/README.md).
+
+---
+
+## Why this tool exists
+
+Hardware packet parsers on FPGAs are traditionally hand-written RTL: tedious to author, hard to verify, and painful to re-target when the protocol set, data-path width, or FPGA family changes. This tool replaces that manual effort with a **push-button flow** that takes a high-level description of *what patterns to match* and emits **pipelined, width-parameterized, self-checking SystemVerilog** ready for Vivado or Quartus.
+
+The key idea is a single, small **intermediate representation shared by every frontend** — we call it the **PIR (Pattern Intermediate Representation)**. Rather than teaching the RTL generator about P4, Snort, or any other source language, each frontend *lowers* its input to the PIR (a table of match patterns), and one backend turns the PIR into hardware. Adding a new input language means writing a frontend that emits the PIR — the entire RTL-generation, extraction, and testbench machinery is reused unchanged.
+
+```
+   ┌─────────────┐
+   │  P4 program │──┐
+   └─────────────┘  │
+   ┌─────────────┐  │     ┌───────────────────────┐     ┌──────────────────────┐
+   │ Snort rules │──┼───▶ │  PIR (pattern table)  │───▶ │  SystemVerilog RTL    │
+   └─────────────┘  │     │  hex-pattern │ id      │     │  + self-checking TBs  │
+   ┌─────────────┐  │     │  (two fields)          │     └──────────────────────┘
+   │ Synthetic   │──┘     └───────────────────────┘
+   │ hex tables  │              (the shared IR)          comparison / lookup /
+   └─────────────┘                                       extractor / top / tb
+```
+
+---
+
+## The PIR — a worked example
+
+The PIR is a plain-text **pattern table** with two fields per line. The first field is always a hex pattern to match; the second is *either* a constant output id *or* a field-extraction directive:
+
+```text
+<hex-pattern>   <id>                             # form A: emit a constant id when the pattern matches
+<hex-pattern>   <field_name>:<startpos>:<endpos>  # form B: extract input bits into a named output port
+```
+
+| Field | Meaning |
+|---|---|
+| `hex-pattern` | The bytes to match, one nibble per hex digit. `x` is a **wildcard** (don't-care nibble). |
+| `id` | A SystemVerilog literal (`W'dN` / `W'hX`) — the value the parser outputs when a packet matches this pattern. |
+| `field_name` | A user-defined ASCII name; the generated RTL uses it to name the output port. |
+| `startpos` | Integer bit position where the field to extract begins (in the input data). |
+| `endpos` | Integer bit position where the field to extract ends (in the input data). |
+
+Every frontend lowers its input to exactly this. The backend then builds up to three combinational stages:
+
+- **comparison** — matches the pattern nibbles. It does *not* emit the final result directly; per match column it emits a compact **pseudo-ID** (a local code for "which literal matched in this column").
+- **lookup** — folds the per-column pseudo-IDs into the final `id`.
+- **extractor** *(only for form B)* — uses the pseudo-IDs to slice the requested bits out of the input data into the named output ports.
+
+```
+                comparison               lookup           (optional) extractor
+ data_in ─▶ match pattern nibbles ─▶ fold pseudo-IDs ─▶ final id ─┬─▶ id_out
+             → pseudo-ID per column     → final id                │
+                                                                  └─▶ selects which
+                                                                      bytes to extract
+```
+
+### Example — classify a pattern to an id
+
+A minimal PIR (form A). The hex literals in the first field are the pattern to look for in the incoming data; the second field is the value the RTL outputs when that pattern matches. `x` nibbles are don't-cares:
+
+```text
+0800xxxxxxx24xxx   4'hA
+86ddxxxxxxxxxxxx   4'hB
+1100xxx4xxxxxxxx   4'hC
+```
+
+The comparison stage emits `data_out` — a 2-bit **pseudo-ID** the tool auto-generates, one code per distinct pattern (not the final result):
+
+```systemverilog
+// comparison_logic_0.sv  (generated) — data_out is a 2-bit pseudo-ID
+always_comb begin
+  data_out = 0;
+  if      ((data_in[63-:16] == 16'h0800) && (data_in[19-:8] == 8'h24)) data_out = 1;
+  else if  (data_in[63-:16] == 16'h86dd)                               data_out = 2;
+  else if ((data_in[63-:16] == 16'h1100) && (data_in[35-:4] == 4'h4))  data_out = 3;
+end
+```
+
+The lookup stage maps that pseudo-ID to the final result. Its `data_in` is the comparison stage's `data_out`:
+
+```systemverilog
+// lookup_logic.sv  (generated)
+always_comb begin
+  data_out = '0;
+  if      (data_in[1-:2] == 2'b01) data_out = 4'hA;
+  else if (data_in[1-:2] == 2'b10) data_out = 4'hB;
+  else if (data_in[1-:2] == 2'b11) data_out = 4'hC;
+end
+```
+
+Here the parser is a pure classifier: a matched pattern in, a user-defined id out. Running this PIR through the real backend is a one-liner — see [Generating RTL from a raw PIR](#generating-rtl-from-a-raw-pir).
+
+### Adding data extraction
+
+Form B reuses the same patterns but replaces the id with a `field_name:startpos:endpos` extraction directive. This PIR produces two output ports: `id1` (8 bits wide, valid only when pattern 1 matches) and `id2` (4 bits wide, valid when pattern 2 or 3 matches). The comparison logic is unchanged — it depends only on the first field of the PIR:
+
+```text
+0800xxxxxxx24xxx   id1:12:19
+86ddxxxxxxxxxxxx   id2:60:63
+1100xxx4xxxxxxxx   id2:32:35
+```
+
+The extraction stage takes two inputs — the raw input data stream and the comparison stage's pseudo-ID — and drives each field port from the requested bit range:
+
+```systemverilog
+// data_extraction.sv  (generated)
+always_comb begin
+  id1 = '0;
+  id2 = '0;
+  if      (comparison_stage_out[1-:2] == 2'b01) id1 = data_in[19:12];
+  else if (comparison_stage_out[1-:2] == 2'b10) id2 = data_in[63:60];
+  else if (comparison_stage_out[1-:2] == 2'b11) id2 = data_in[35:32];
+end
+```
+
+The PIR also supports user-defined **custom tokens** — a powerful way to express non-equality checks (ranges, negation, set membership) or to add user-defined input ports for comparison in the generated RTL; see the paper for details. This same field machinery is how the P4 flow lifts header fields: tag a P4 field name with `__<name>__` and the frontend emits an extraction directive for it (see `p4/simple_parser.p4`). Alongside these stages the backend also emits a width-parameterized **top module** (`hex_to_rtl_top.sv` / `parser_top.sv`) and **self-checking testbenches** for every design.
+
+Nothing about the two-field PIR changes when you also want fields pulled out of the incoming data stream. The final `id` additionally indexes an auto-generated `mask_extractor.sv`, which slices the relevant bytes out of the matched packet — the pseudo-IDs from the comparison stage are what ultimately drive that selection. This is how the P4 flow lifts header fields: tag a P4 field name with `__<name>__` and the frontend turns it into an extractable field (see `p4/simple_parser.p4`). The backend also emits a width-parameterized **top module** (`hex_to_rtl_top.sv` / `parser_top.sv`) and **self-checking testbenches** for every design.
+
+---
 
 ## Repository Structure
 
@@ -9,21 +134,34 @@ PatternToParser/
 ├── p4/                   # P4 source files (inputs for Flow 1)
 │   ├── full_parser.p4    # Full parser: Ethernet + VLAN + MPLS + IPv4/IPv6 + TCP/UDP
 │   └── simple_parser.p4  # Simple parser: Ethernet + IPv4/IPv6 + TCP/UDP
-├── engine/               # Core RTL generation engine
-│   ├── gen_parser.py     # JSON graph → RTL
-│   ├── p4_to_rtl.py      # P4 → RTL (end-to-end)
-│   ├── tools/            # build_mask.py, build_rtl_countluts.py, p4_to_ir.py
-│   ├── utils/
-│   └── templates/        # Jinja2 SystemVerilog templates
-├── synthetic/            # Pre-generated synthetic hex benchmarks (inputs for Flow 2)
-├── snort_frontend/       # Snort rule parser (inputs for Flow 3)
+├── engine/               # Core RTL generation engine (frontends + backend)
+│   ├── gen_parser.py     # Graph JSON → PIR → RTL
+│   ├── p4_to_rtl.py      # P4 → PIR → RTL (end-to-end)
+│   ├── tools/            # build_mask.py (PIR builder), build_rtl_countluts.py (backend), p4_to_ir.py (P4 frontend)
+│   ├── utils/            # graph traversal, encoding, Jinja2 helpers
+│   └── templates/        # Jinja2 SystemVerilog templates (comparison, lookup, extractor, top, tb)
+├── snort_frontend/       # Snort rule frontend (Flow 3)
 │   ├── snort.txt         # Example Snort rules (5 rules)
 │   └── snort_10_rule.txt # Larger example (10 rules)
+├── synthetic/            # Pre-generated synthetic hex benchmarks (inputs for Flow 2)
+├── artifact_evaluation/  # Paper-reproduction: instructions, result-extraction scripts, plots
+│   ├── README.md         # Step-by-step reproduction guide
+│   ├── plots/            # Figure-generation scripts for the paper
+│   └── *_extract.py      # Per-table/figure result-extraction scripts
 ├── artifact_out/         # Pre-generated RTL for all paper results (committed)
+├── vivado_extract_resources.py   # Parse Vivado reports (used by `make extract`)
+├── quartus_extract_resources.py  # Parse Quartus reports (used by `make extract`)
 ├── Makefile              # Push-button flows
 ├── requirements.txt
 └── LICENSE
 ```
+
+**Where things live, conceptually:**
+
+| Stage | Code |
+|---|---|
+| Frontends (source → PIR) | `engine/tools/p4_to_ir.py` (P4), `snort_frontend/` (Snort), `synthetic/main.py` (synthetic), `engine/tools/build_mask.py` (graph JSON) |
+| Backend (PIR → RTL) | `engine/tools/build_rtl_countluts.py` + `engine/templates/` |
 
 ---
 
@@ -61,112 +199,9 @@ If already on your `PATH`, omit the `VIVADO=` / `QUARTUS=` overrides in the comm
 
 ---
 
-## Artifact Evaluation
-
-`artifact_out/` is committed with pre-generated RTL and self-checking testbenches for all paper results. The typical flow is: **RTL → Simulate → Synthesize**.
-
-| Artifact | Contents | Synthesis tool | Output CSV |
-|---|---|---|---|
-| `artifact_out/table1/` | Simple Parser (256b, 320b) + Full Parser (64b, 320b, 512b) × {tree, unique} — 10 configs | Vivado | `table1_results.csv` |
-| `artifact_out/fig_6_7/` | Simple + Full parser × 5 data widths, unique mode — 10 configs | Quartus (Fig 6) / Vivado (Fig 7) | `fig6_results.csv`, `fig7_results.csv` |
-| `artifact_out/table3/` | Snort 10-rule parser | Vivado + Quartus | `table3_results.csv` |
-| `artifact_out/fig9/` | Synthetic benchmarks: flat + decomposed × 3 widths × 4 ug — 24 configs | Vivado | `fig9_results.csv` |
-
-### Step 1 — RTL Generation
-
-`artifact_out/` is already committed and ready to use. Regenerate it only if needed (e.g. after modifying templates):
-
-```bash
-make table1-rtl    # → artifact_out/table1/
-make table3-rtl    # → artifact_out/table3/snort_10rule/
-make fig_6_7-rtl   # → artifact_out/fig_6_7/   (shared by Fig 6 & 7)
-make fig9-rtl      # → artifact_out/fig9/
-```
-
-### Step 2 — Simulation
-
-Each design ships with self-checking testbenches (`hex_to_rtl_top_tb` and `parser_top_tb`). Run all artifact simulations:
-
-```bash
-make sim VERILATOR=/path/to/verilator
-```
-
-Or per artifact:
-
-```bash
-make sim-table1   VERILATOR=/path/to/verilator
-make sim-table3   VERILATOR=/path/to/verilator
-make sim-fig_6_7  VERILATOR=/path/to/verilator
-make sim-fig9     VERILATOR=/path/to/verilator
-```
-
-Pass `CONFIG=<subdir-name>` to run a single configuration instead of the full sweep:
-
-```bash
-make sim-table1  CONFIG=full_dw64_tree      VERILATOR=/path/to/verilator
-make sim-fig_6_7 CONFIG=simple_dw128_unique VERILATOR=/path/to/verilator
-make sim-fig9    CONFIG=flat_u256_ug1       VERILATOR=/path/to/verilator
-```
-
-Each config compiles into `<design_dir>/sim_build/` (not committed). Any `MISMATCH` in the output causes a non-zero exit. A VCD waveform (`<tb_name>.vcd`) is written to `sim_build/` alongside the binary.
-
-### Step 3 — Synthesis
-
-#### Table 1
-
-LUT count, FF count, and Fmax for Simple Parser (256b, 320b) and Full Parser (64b, 320b, 512b) in both unique and tree configurations.
-
-```bash
-make table1-synth   VIVADO=/path/to/vivado PART=xc7vx690tffg1761-2 # all 10 configs, Virtex 7 FPGA Part to match previous papers
-make table1-synth   VIVADO=/path/to/vivado CONFIG=full_dw64_tree  # single config
-make table1-extract                                               # → table1_results.csv
-```
-
-#### Table 3
-
-Fmax, LUT (Vivado), ALM (Quartus), and FF for the Snort 10-rule parser on both toolchains.
-
-```bash
-make table3-synth-vivado   VIVADO=/path/to/vivado
-make table3-synth-quartus  QUARTUS=/path/to/quartus_sh
-make table3-extract                                                # → table3_results.csv
-```
-
-#### Figure 6
-
-ALM count and Fmax (Quartus / Intel Agilex 5) sweeping Simple and Full parser across all data widths.
-
-```bash
-make fig6-synth   QUARTUS=/path/to/quartus_sh                          # all 10 configs
-make fig6-synth   QUARTUS=/path/to/quartus_sh CONFIG=full_dw128_unique # single config
-make fig6-extract                                                        # → fig6_results.csv
-```
-
-#### Figure 7
-
-LUT count and Fmax (Vivado / AMD Versal) for the same configurations as Figure 6. Shares the same RTL as Figure 6.
-
-```bash
-make fig7-synth   VIVADO=/path/to/vivado                          # all 10 configs
-make fig7-synth   VIVADO=/path/to/vivado CONFIG=full_dw128_unique # single config
-make fig7-extract                                                  # → fig7_results.csv
-```
-
-#### Figure 9
-
-LUT count and Fmax (Vivado) for synthetic benchmarks across two graph configs (flat, decomposed), three data widths (256, 512, 1024b), and four uniqueness groups — 24 configurations total.
-
-```bash
-make fig9-synth   VIVADO=/path/to/vivado                       # all 24 configs (~6–7 hours)
-make fig9-synth   VIVADO=/path/to/vivado CONFIG=flat_u256_ug1  # single config
-make fig9-extract                                               # → fig9_results.csv
-```
-
----
-
 ## Using the Tool
 
-This section is for users who want to generate parsers from their own inputs, experiment with different configurations, or run synthesis outside the artifact evaluation flows.
+This section is for users who want to generate parsers from their own inputs, experiment with different configurations, or run synthesis outside the artifact evaluation flows. Reproducing the paper's tables and figures? See [`artifact_evaluation/`](artifact_evaluation/README.md).
 
 ### Flow 1 — P4 → RTL
 
@@ -184,6 +219,8 @@ Each output directory contains:
 - `mask_extractor.sv` — field extractor
 - `hex_to_rtl_top.sv` + `hex_to_rtl_top_tb.sv` — top-level and testbench
 - `parser_top.sv` + `parser_top_tb.sv` — full parser top and testbench
+
+> **Tip:** To extract a field in the P4 flow, tag the header field name with `__<name>__` (e.g. `bit<8> protocol__prot__;`). The frontend turns it into a `prot:msb:lsb` extraction tag in the PIR. See `p4/simple_parser.p4`.
 
 ### Flow 2 — Synthetic Benchmarks → RTL
 
@@ -205,6 +242,32 @@ make snort SNORT_INPUT=snort_frontend/snort.txt          # custom rule file
 ```
 
 Output: `snort_out/`
+
+### Generating RTL from a raw PIR
+
+You can also drive the backend directly with a PIR (`.hex`) and a small config JSON — this is the path used by the [worked example](#the-pir--a-worked-example) above and by Flows 2 and 3 internally:
+
+```bash
+PYTHONPATH=engine python3 engine/tools/build_rtl_countluts.py \
+    -c config.json \
+    -m example.pir \
+    -o out --rtl --tree1 --tree2
+```
+
+The config JSON describes how the PIR columns map onto the data path:
+
+```json
+{
+  "num_cols": 1,          // number of match columns
+  "char_per_col": 16,     // hex chars (nibbles) per column
+  "col_per_file": 1,      // columns grouped per comparison_logic file
+  "data_width": 64,       // input bus width (bits)
+  "max_width": 64,        // max packet width to parse (bits)
+  "custom": []            // custom token predicates (RANGE / NE / EQOR)
+}
+```
+
+Swap `--tree1 --tree2` for `--unique1 --unique2` to emit parallel (flat) comparators instead of a priority tree.
 
 ### Run all generation flows
 
@@ -240,25 +303,23 @@ All variables can be overridden on the `make` command line.
 | `QUARTUS` | `quartus_sh` | Path to the Quartus Shell executable |
 | `VERILATOR` | `verilator` | Path to the Verilator executable |
 | `CONFIG` | _(all)_ | Limit a synth or sim sweep to one named subdirectory |
-| `TABLE1_PART` | `xcvc1902-vsva2197-3HP-e-S` | FPGA part passed to Vivado for Table 1 |
-| `SNORT_INPUT` | `snort_frontend/snort_10_rule.txt` | Snort rule file for `make snort` / `make table3-rtl` |
+| `PART` | _(tool default)_ | FPGA part passed to Vivado / Quartus for synthesis |
+| `SNORT_INPUT` | `snort_frontend/snort_10_rule.txt` | Snort rule file for `make snort` |
 | `SNORT_WIDTH` | `128` | Maximum packet width in bytes for the Snort flow |
 | `DWS` | `64 128 256 320 512` | Data widths swept in `make p4` |
 
 **Examples:**
 
 ```bash
-# Synthesize Table 1 on a different FPGA part
-make table1-synth VIVADO=/opt/Xilinx/Vivado/2023.2/bin/vivado TABLE1_PART=xcku025-ffva1156-1-c
+# Synthesize a generated design on a specific FPGA part
+make synth TOOL=vivado DIR=p4_out/full_parser \
+    VIVADO=/opt/Xilinx/Vivado/2023.2/bin/vivado PART=xcku025-ffva1156-1-c
 
 # Run the Snort flow with a custom rule file and narrower packet width
 make snort SNORT_INPUT=snort_frontend/snort.txt SNORT_WIDTH=64
 
 # Sweep only a subset of data widths in Flow 1
 make p4 DWS="64 256 512"
-
-# Override the Quartus target device (Agilex 5 is the default)
-quartus_sh -t run_quartus.tcl artifact_out/table3/snort_10rule 10AX115S2F45I1SG
 ```
 
 ---
@@ -274,6 +335,49 @@ Known limitations — useful context for anyone evaluating the tool or consideri
 3. **Fixed nibble-level (4-bit) granularity.** The tool decomposes and matches patterns at 4-bit resolution, which is standard for networking protocols. Extending to bit-level resolution would broaden applicability to domains such as genomics or signal processing, but would require reworking the column/segment model throughout the pipeline.
 
 Beyond these, the token system currently supports only a fixed set of predicates (`RANGE`, `NE`, `EQOR`). Extending it to operations such as bit counting, parity checks, or masked comparisons — together with relaxing the cross-group token constraint above — would broaden applicability beyond networking. Design-space exploration currently requires synthesizing each candidate with commercial FPGA tools; integrating analytical resource models that predict LUT/FF counts directly from the PIR would enable fast architectural search without repeated synthesis runs.
+
+---
+
+## Contributing
+
+Contributions are welcome — whether it's a new frontend, a backend improvement, more tests, or documentation.
+
+**Good first areas to contribute** (see [Tool Limitations](#tool-limitations) for the deeper open problems):
+
+- **New frontends.** Any source language can be supported by lowering it to the PIR (`<hex-pattern> <path_id> [tags]`). Model a new frontend on `engine/tools/p4_to_ir.py` or `snort_frontend/` — no backend changes needed.
+- **New token predicates.** The comparison backend currently supports `RANGE`, `NE`, and `EQOR` (see `parse_custom_field` in `engine/utils/utils.py` and the predicate emitters in `build_rtl_countluts.py`). Adding predicates like masked-compare or popcount is self-contained.
+- **Backend / template improvements.** RTL is generated from Jinja2 templates in `engine/templates/`; QoR (LUT/FF/Fmax) improvements land there and in `build_rtl_countluts.py`.
+- **Analytical cost models.** Predicting resource usage directly from the PIR (rather than synthesizing) would enable fast design-space exploration.
+
+**Workflow:**
+
+1. Fork the repo and create a feature branch.
+2. Make your change. If it touches RTL generation, regenerate an affected design and run its testbench:
+   ```bash
+   make sim-table1 CONFIG=simple_dw256_tree VERILATOR=/path/to/verilator
+   ```
+   Every generated design ships with a self-checking testbench — a green `PASS` (no `MISMATCH`) is the bar for a correctness-preserving change.
+3. Open a pull request describing **what** changed and **why**, and note whether generated RTL / simulation results are affected.
+
+Please open an issue first for larger changes (new frontends, backend rearchitecting) so we can align on approach.
+
+---
+
+## Citation
+
+If you use this tool or build on it in academic work, please cite the paper:
+
+```bibtex
+@misc{garg2026patternsparsersautomaticgeneration,
+      title={From Patterns to Parsers: Automatic Generation of Efficient Hardware Parsers for FPGAs},
+      author={Tushar Garg and Andrew Boutros},
+      year={2026},
+      eprint={2607.16058},
+      archivePrefix={arXiv},
+      primaryClass={cs.AR},
+      url={https://arxiv.org/abs/2607.16058},
+}
+```
 
 ---
 
