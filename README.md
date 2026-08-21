@@ -123,7 +123,14 @@ end
 
 The PIR also supports user-defined **custom tokens** — a powerful way to express non-equality checks (ranges, negation, set membership) or to add user-defined input ports for comparison in the generated RTL; see the paper for details. This same field machinery is how the P4 flow lifts header fields: tag a P4 field name with `__<name>__` and the frontend emits an extraction directive for it (see `p4/simple_parser.p4`). Alongside these stages the backend also emits a width-parameterized **top module** (`hex_to_rtl_top.sv` / `parser_top.sv`) and **self-checking testbenches** for every design.
 
-Nothing about the two-field PIR changes when you also want fields pulled out of the incoming data stream. The final `id` additionally indexes an auto-generated `mask_extractor.sv`, which slices the relevant bytes out of the matched packet — the pseudo-IDs from the comparison stage are what ultimately drive that selection. This is how the P4 flow lifts header fields: tag a P4 field name with `__<name>__` and the frontend turns it into an extractable field (see `p4/simple_parser.p4`). The backend also emits a width-parameterized **top module** (`hex_to_rtl_top.sv` / `parser_top.sv`) and **self-checking testbenches** for every design.
+### Frontends
+
+Because the PIR is the only thing the backend understands, adding an input language just means writing a **frontend** that emits it. Two ship today:
+
+- **P4 frontend** (`engine/tools/p4_to_ir.py`) — compiles a P4 program with `p4c` and walks the resulting parse graph into a PIR.
+- **Snort frontend** (`snort_frontend/`) — converts a `.txt` file of Snort rules into a PIR.
+
+(Pre-computed synthetic hex tables can also be fed straight to the backend, no frontend needed.) The paper describes both frontends in more detail.
 
 ---
 
@@ -219,6 +226,7 @@ Each output directory contains:
 - `mask_extractor.sv` — field extractor
 - `hex_to_rtl_top.sv` + `hex_to_rtl_top_tb.sv` — top-level and testbench
 - `parser_top.sv` + `parser_top_tb.sv` — full parser top and testbench
+- `axi_skid.sv` — AXI skid buffer instantiated by the top modules
 
 > **Tip:** To extract a field in the P4 flow, tag the header field name with `__<name>__` (e.g. `bit<8> protocol__prot__;`). The frontend turns it into a `prot:msb:lsb` extraction tag in the PIR. See `p4/simple_parser.p4`.
 
@@ -288,10 +296,13 @@ make synth   TOOL=quartus DIR=p4_out/full_parser QUARTUS=/path/to/quartus_sh
 ### Clean
 
 ```bash
-make clean        # remove generated RTL output directories (p4_out/, synthetic_out/, snort_out/)
+make clean        # remove ALL generated outputs: p4_out/, synthetic_out/, snort_out/,
+                  #   artifact_out/, engine/tmp/, generated Snort files, and result CSVs
 make clean-sim    # remove sim_build/ directories inside artifact_out/
 make clean-synth  # remove synthesis project directories and .done markers
 ```
+
+> **Note:** `make clean` also deletes `artifact_out/` (the committed pre-generated RTL). Restore it with `git checkout artifact_out/`, or regenerate via the [`artifact_evaluation/`](artifact_evaluation/README.md) `*-rtl` targets.
 
 ### Configuration variables
 
@@ -344,22 +355,12 @@ Contributions are welcome — whether it's a new frontend, a backend improvement
 
 **Good first areas to contribute** (see [Tool Limitations](#tool-limitations) for the deeper open problems):
 
-- **New frontends.** Any source language can be supported by lowering it to the PIR (`<hex-pattern> <path_id> [tags]`). Model a new frontend on `engine/tools/p4_to_ir.py` or `snort_frontend/` — no backend changes needed.
+- **New frontends.** Any source language can be supported by lowering it to the PIR (`<hex-pattern> <id>`). Model a new frontend on `engine/tools/p4_to_ir.py` or `snort_frontend/` — no backend changes needed.
 - **New token predicates.** The comparison backend currently supports `RANGE`, `NE`, and `EQOR` (see `parse_custom_field` in `engine/utils/utils.py` and the predicate emitters in `build_rtl_countluts.py`). Adding predicates like masked-compare or popcount is self-contained.
 - **Backend / template improvements.** RTL is generated from Jinja2 templates in `engine/templates/`; QoR (LUT/FF/Fmax) improvements land there and in `build_rtl_countluts.py`.
 - **Analytical cost models.** Predicting resource usage directly from the PIR (rather than synthesizing) would enable fast design-space exploration.
 
-**Workflow:**
-
-1. Fork the repo and create a feature branch.
-2. Make your change. If it touches RTL generation, regenerate an affected design and run its testbench:
-   ```bash
-   make sim-table1 CONFIG=simple_dw256_tree VERILATOR=/path/to/verilator
-   ```
-   Every generated design ships with a self-checking testbench — a green `PASS` (no `MISMATCH`) is the bar for a correctness-preserving change.
-3. Open a pull request describing **what** changed and **why**, and note whether generated RTL / simulation results are affected.
-
-Please open an issue first for larger changes (new frontends, backend rearchitecting) so we can align on approach.
+Before opening a PR, regenerate any affected RTL and run the bundled self-checking testbenches — every generated design ships with a `hex_to_rtl_top_tb` (and, where applicable, a `parser_top_tb`), and a green `PASS` with no `MISMATCH` is the bar for a correctness-preserving change (see the simulation flow in [`artifact_evaluation/`](artifact_evaluation/README.md)). For larger changes such as a new frontend or backend rework, please open an issue first so we can align on approach.
 
 ---
 
