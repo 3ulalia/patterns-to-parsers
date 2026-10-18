@@ -175,6 +175,8 @@ def rules_to_hex_streams(rules_json, pkt_len_bytes, outfile):
 if __name__ == "__main__":
     args = parse_args()
 
-    rules_json = txt_to_json(args.i, "out.json", args.dumpjson)
+    out_dir = os.path.dirname(os.path.abspath(args.o))
+    os.makedirs(out_dir, exist_ok=True)
+    rules_json = txt_to_json(args.i, os.path.join(out_dir, "rules_debug.json"), args.dumpjson)
     rules_to_hex_streams(rules_json, int(args.w), args.o)
     

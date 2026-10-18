@@ -9,9 +9,9 @@ import string
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--i", required=True, help="input txt file with snort rules")
-    parser.add_argument("--o", required=True, help="output hex file name")
+    parser.add_argument("--o", required=True, help="output PIR file; <name>_config.json and <name>_msg_map.txt are written next to it")
     parser.add_argument("--w", "--width", type=str, required=True, help='Generates mask width in bytes')
-    parser.add_argument("--dumpjson", action="store_true", help="Dumps json file for debugging to out.json")
+    parser.add_argument("--dumpjson", action="store_true", help="Dumps the parsed rules as rules_debug.json next to the output file")
     return parser.parse_args()
 
 

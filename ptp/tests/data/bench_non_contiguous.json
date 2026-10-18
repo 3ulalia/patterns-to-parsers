@@ -1,0 +1,8 @@
+{
+  "num_cols": 1,
+  "char_per_col": 32,
+  "col_per_file": 1,
+  "data_width": 64,
+  "max_width": 128,
+  "custom": []
+}

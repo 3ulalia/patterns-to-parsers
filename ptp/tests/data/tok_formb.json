@@ -1,0 +1,4 @@
+{"data_width": 32, "max_width": 64, "custom": [
+ {"id": "GHIJ", "type": "const", "opcode": "RANGE", "values": ["1000", "2000"]},
+ {"id": "KLMN", "type": "const", "opcode": "EQOR", "values": ["3000", "3001", "FFFF"]},
+ {"id": "PQRS", "type": "const", "opcode": "NE", "values": ["0016", ""]}]}
