@@ -1,4 +1,6 @@
-# Patterns to Parsers
+# Patterns to Parsers: Qualifying Rewrites of Structural Translators Using Vitis
+
+## What follows below is the contents of the original project's README. 
 
 [![Paper](https://img.shields.io/badge/arXiv-2607.16058-b31b1b.svg)](https://arxiv.org/abs/2607.16058)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
