@@ -36,7 +36,7 @@ def write_project(
         # source directives.tcl ;# not yet!
 
         set step csim
-        if {{info exists ::env(PTP_STEP)}} {{ set step $::env(PTP_STEP) }}
+        if {{[info exists ::env(PTP_STEP)]}} {{ set step $::env(PTP_STEP) }}
         if {{$step ni {{csim synth cosim impl}}}} {{
             puts "ERROR: unknown step '$step'"
             exit 1
