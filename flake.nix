@@ -29,6 +29,8 @@
             python3
             ty
             ruff
+            boost
+            ccls
             python3Packages.numpy
             python3Packages.pytest
           ];
