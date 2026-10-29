@@ -15,4 +15,4 @@ venv*/
 .DS_Store
 *.swp
 *.swo
-.ccls_cache/
+.ccls-cache/
