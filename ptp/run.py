@@ -1,6 +1,6 @@
 """FIRST-ROW-WINS parser generator: the PIR row order is the priority; overlaps are legal, never an error.
 CLI (form A: parser.sv; form B: parser.sv + extraction.sv + parser_top.sv; plus parser_tb.sv and vec_*.hex):
-python3 -m ptp.run <hex> <json> -o <outdir> [--data-width N] [--char-per-col N] [--packets N] [--seed S] [--or-encode] [--sim]"""
+python3 -m ptp.run <hex> <json> -o <outdir> [--data-width N] [--char-per-col N] [--packets N] [--seed S] [--or-encode] [--sim] [--backend hls|rtl] [--hls-run csim|synth|cosim|impl] [--part part] [--clock ns]"""
 
 import argparse
 import os
@@ -37,7 +37,6 @@ def generate(
     os.makedirs(outdir, exist_ok=True)
     nflits = sum(len(p) for p in pkts)
     exp = [emit.pack_expected(d, golden.expected(rows, cfg, p, ports)[0]) for p in pkts]
-    emit.emit_vector_files(d, pkts, exp, outdir)
     if backend == "rtl":
         emit.emit_parser(d, os.path.join(outdir, "parser.sv"), or_encode=or_encode)
         if cfg.form == "B":
@@ -50,6 +49,7 @@ def generate(
         hls_run.write_project(d, outdir, or_encode, hls_part, hls_clock)
     else:
         raise ValueError(f"Unknown backend {backend}")
+    emit.emit_vector_files(d, pkts, exp, outdir)
 
     gen_time = time.time() - t0
     bad = 0
