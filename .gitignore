@@ -16,3 +16,4 @@ venv*/
 *.swp
 *.swo
 .ccls-cache/
+.direnv/
