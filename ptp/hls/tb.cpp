@@ -21,6 +21,11 @@ int main() {
   std::ifstream ctrl_file("vec_ctrl.hex");
   std::ifstream exp_file("vec_exp.hex");
 
+  if (flits_file.fail() || ctrl_file.fail() || exp_file.fail()) {
+    std::cout << "Failed to open one of the hex files!" << std::endl;
+    return 1;
+  }
+
   int flit_index = 0;
   int packet_index = 0;
   int n_mismatches = 0;
@@ -69,6 +74,12 @@ int main() {
       n_mismatches++;
     }
     flit_index++;
+  }
+
+  if (std::getline(ctrl_file, ctrl_line) || std::getline(exp_file, exp_line)) {
+    std::cout << "MISMATCH: not all files finished at the same time!"
+              << std::endl;
+    n_mismatches++;
   }
 
   if (!inStream.empty()) {
