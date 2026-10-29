@@ -220,8 +220,9 @@ is latched ONE-HOT (one bit per segment).  The only hard errors are syntax error
     )
     for msg in d.info:
         print(msg)
+    hm = st["hls_mismatches"]
     print(
-        f"packets={st['packets']} co-match packets={st['comatch_packets']} dropped(undefined)={st['dropped']} flits={st['flits']} golden-vs-model mismatches={st['model_mismatches']} {f'hls_mismatches={st["hls_mismatches"]}' if a.backend == 'hls' else ''} gen={st['gen_time']}s"
+        f"packets={st['packets']} co-match packets={st['comatch_packets']} dropped(undefined)={st['dropped']} flits={st['flits']} golden-vs-model mismatches={st['model_mismatches']} {f'hls_mismatches={hm}' if a.backend == 'hls' else ''} gen={st['gen_time']}s"
     )
     if st["model_mismatches"]:
         print("FAIL: python model disagrees with golden")
