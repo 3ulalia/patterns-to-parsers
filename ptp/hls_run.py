@@ -24,13 +24,12 @@ def write_project(
         shutil.copy(f, outdir)
     with open(os.path.join(outdir, "run_hls.tcl"), "w") as f:
         f.write(f"""
-        open_project -reset hls_proj
+        open_component -reset hls_proj -flow_target vivado
         set_top parser_top
         add_files parser_top.cpp -cflags {{-std=c++17 -DPTP_OR_ENCODE={int(or_encode)} }}
         add_files -tb tb.cpp     -cflags {{-std=c++17 -DPTP_OR_ENCODE={int(or_encode)} }}
         add_files -tb {{vec_flits.hex vec_ctrl.hex vec_exp.hex}}
 
-        open_solution -reset sol -flow_target vivado
         set_part {{{part}}}
         create_clock -period {clock_ns} -name default
         # source directives.tcl ;# not yet!
