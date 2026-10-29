@@ -329,6 +329,14 @@ def emit_hls_header(d: Design, path: str) -> None:
         ("GROUP_IDS", "unsigned long long", pad("N_OUTPUTS")),
     ]
 
+    _array_widths = [  # (name, element type, C++ value expression)
+        ("CMP_W", "int", pad("N_COMPARATORS")),
+        ("SEG_W", "int", pad("N_SEGMENTS")),
+        ("PID_W", "int", pad("N_PID_BITS")),
+        ("ROW_W", "int", pad("N_ROWS")),
+        ("OUT_W", "int", pad("N_OUTPUTS")),
+    ]
+
     _array_names = set(map(lambda t: t[0], _ARRAYS))
 
     # Vitis limit
@@ -368,6 +376,9 @@ def emit_hls_header(d: Design, path: str) -> None:
         for variable, value in parsed_design.items():
             if variable not in _array_names:
                 w_c(variable, value)
+
+        for variable, _type, value in _array_widths:
+            w_c(variable, value)
 
         for arr_var, arr_t, arr_size in _ARRAYS:
             write_array(arr_var, arr_t, arr_size, parsed_design[arr_var])
