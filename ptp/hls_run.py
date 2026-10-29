@@ -6,6 +6,7 @@ import glob
 import os
 import shutil
 import subprocess
+import textwrap
 import time
 
 from .design import Design
@@ -22,12 +23,15 @@ def write_project(
 ):
     for f in glob.glob(os.path.join(os.path.dirname(__file__), "hls", "*")):
         shutil.copy(f, outdir)
+
+    cflags = f"-std=c++17 -DPTP_OR_ENCODE={int(or_encode)}"
     with open(os.path.join(outdir, "run_hls.tcl"), "w") as f:
         f.write(f"""
-        open_component -reset hls_proj -flow_target vivado
+        open_project -reset hls_proj
+        open_solution -reset sol -flow_target vivado
         set_top parser_top
-        add_files parser_top.cpp -cflags {{-std=c++17 -DPTP_OR_ENCODE={int(or_encode)} }}
-        add_files -tb tb.cpp     -cflags {{-std=c++17 -DPTP_OR_ENCODE={int(or_encode)} }}
+        add_files parser_top.cpp -cflags {{{cflags}}}
+        add_files -tb tb.cpp     -cflags {{{cflags}}}
         add_files -tb {{vec_flits.hex vec_ctrl.hex vec_exp.hex}}
 
         set_part {{{part}}}
@@ -46,6 +50,25 @@ def write_project(
         if {{$step eq "impl"}} {{export_design -flow impl -rtl verilog}}
         exit
         """)
+    with open(os.path.join(outdir, "hls_config.cfg"), "w") as f:
+        f.write(
+            textwrap.dedent(f"""
+        part={part}
+
+        [hls]
+        clock={clock_ns}
+        flow_target=vivado
+        syn.file=parser_top.cpp
+        syn.top=parser_top
+        syn.cflags={cflags}
+        tb.file=tb.cpp
+        tb.file=vec_flits.hex
+        tb.file=vec_ctrl.hex
+        tb.file=vec_exp.hex
+        tb.cflags={cflags}
+        package.output.format=ip_catalog
+        """).lstrip()
+        )
 
 
 def run(outdir: str, step="csim"):

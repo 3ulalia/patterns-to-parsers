@@ -222,6 +222,7 @@ PROJECT_FILES = [
     "vec_flits.hex",
     "vec_ctrl.hex",
     "vec_exp.hex",
+    "hls_config.cfg",
 ]
 
 
@@ -289,7 +290,7 @@ def test_run_tcl(tmp_path, or_encode):
     )
     script = (tmp_path / "run_hls.tcl").read_text()
     assert _braces_balanced(script)
-    assert script.count(f"-DPTP_OR_ENCODE={int(or_encode)} ") == 2
+    assert script.count(f"-DPTP_OR_ENCODE={int(or_encode)}") == 2
     assert "set_part {xcvu9p-flga2104-2-i}" in script
     assert "create_clock -period 2.5 " in script
     assert "set_top parser_top" in script
