@@ -10,7 +10,7 @@ import time
 
 from .design import Design
 
-VITIS_HLS = os.environ.get("VITIS_HLS", "vitis_hls")
+VITIS_RUN = os.environ.get("VITIS_RUN", "vitis-run")
 
 
 def write_project(
@@ -35,7 +35,8 @@ def write_project(
         create_clock -period {clock_ns} -name default
         # source directives.tcl ;# not yet!
 
-        set step [expr {{$argc > 0 ? [lindex $argv 0] : "csim"}}]
+        set step csim
+        if {{info exists ::env(PTP_STEP)}} {{ set step $::env(PTP_STEP) }}
         if {{$step ni {{csim synth cosim impl}}}} {{
             puts "ERROR: unknown step '$step'"
             exit 1
@@ -53,13 +54,14 @@ def run(outdir: str, step="csim"):
         raise ValueError(f"unknown step {step}")
 
     outdir = os.path.abspath(outdir)
-    vitis = shutil.which(VITIS_HLS)
-    if not vitis:
-        return None, 0, 0, "Vitis HLS not found on PATH!"
+    vitis_run = shutil.which(VITIS_RUN)
+    if not vitis_run:
+        return None, 0, 0, "vitis-run not found on PATH!"
     start_time = time.time()
     result = subprocess.run(
-        [vitis, "-f", "run_hls.tcl", "-tclargs", step],
+        [vitis_run, "--mode", "hls", "--tcl", "run_hls.tcl"],
         cwd=outdir,
+        env={**os.environ, "PTP_STEP": step},
         capture_output=True,
         text=True,
     )
