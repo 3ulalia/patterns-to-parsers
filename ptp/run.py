@@ -1,6 +1,6 @@
 """FIRST-ROW-WINS parser generator: the PIR row order is the priority; overlaps are legal, never an error.
 CLI (form A: parser.sv; form B: parser.sv + extraction.sv + parser_top.sv; plus parser_tb.sv and vec_*.hex):
-python3 -m ptp.run <hex> <json> -o <outdir> [--data-width N] [--char-per-col N] [--packets N] [--seed S] [--or-encode] [--sim] [--backend hls|rtl] [--hls-run csim|synth|cosim|impl] [--part part] [--clock ns]"""
+python3 -m ptp.run <hex> <json> -o <outdir> [--data-width N] [--char-per-col N] [--packets N] [--seed S] [--or-encode] [--sim] [--backend hls|rtl] [--hls-run csim|synth|cosim|impl] [--part part] [--clock ns] [--hls-opts key=value,...] [--vivado-run synth|impl]"""
 
 import argparse
 import os
@@ -9,7 +9,19 @@ import subprocess
 import sys
 import time
 
-from . import design, emit, emit_hls, golden, hls_ref, hls_run, model, pir, vectors
+from . import (
+    design,
+    emit,
+    emit_hls,
+    golden,
+    hls_ref,
+    hls_report,
+    hls_run,
+    model,
+    pir,
+    vectors,
+    vivado_run,
+)
 
 VERILATOR = os.environ.get("VERILATOR", "verilator")
 
@@ -24,8 +36,9 @@ def generate(
     char_per_col=None,
     or_encode=False,
     backend="rtl",
-    hls_part="xcu280-fsvh2892-2L-e",
-    hls_clock=10,
+    part="xcu280-fsvh2892-2L-e",
+    clock=10,
+    hls_options="",
 ):
     """Generate all files; returns (design, stats dict, nflits).  Cross-checks model vs golden."""
     t0 = time.time()
@@ -43,10 +56,14 @@ def generate(
             emit.emit_extraction(d, os.path.join(outdir, "extraction.sv"))
             emit.emit_parser_top(d, os.path.join(outdir, "parser_top.sv"))
         emit.emit_tb(d, nflits, len(pkts), os.path.join(outdir, "parser_tb.sv"), ports)
+        vivado_run.write_project(
+            outdir, "parser" if cfg.form == "A" else "parser_top", part, clock
+        )
     elif backend == "hls":
+        parsed_opts = hls_run.parse_options(hls_options)
         tables = emit_hls.hls_tables(d)
         emit_hls.emit_hls_header(d, os.path.join(outdir, "ptp_design.h"))
-        hls_run.write_project(d, outdir, or_encode, hls_part, hls_clock)
+        hls_run.write_project(d, outdir, or_encode, part, clock, parsed_opts)
     else:
         raise ValueError(f"Unknown backend {backend}")
     emit.emit_vector_files(d, pkts, exp, outdir)
@@ -173,8 +190,15 @@ is latched ONE-HOT (one bit per segment).  The only hard errors are syntax error
     ap_.add_argument(
         "--hls-run", choices=["csim", "synth", "cosim", "impl"], default="csim"
     )
+    ap_.add_argument(
+        "--vivado-run",
+        choices=["synth", "impl"],
+        default=None,
+        help="RTL only; runs after --sim passes",
+    )
     ap_.add_argument("--part", default="xcu280-fsvh2892-2L-e")
     ap_.add_argument("--clock", default="10", type=float)
+    ap_.add_argument("--hls-opts", default="", help="HLS only")
     a = ap_.parse_args(argv)
     try:
         d, st, _n = generate(
@@ -189,8 +213,11 @@ is latched ONE-HOT (one bit per segment).  The only hard errors are syntax error
             a.backend,
             a.part,
             a.clock,
+            a.hls_opts,
         )
-    except ValueError as e:  # PIR syntax / token-straddles-flit errors
+    except ValueError as e:
+        # PIR syntax / token-straddles-flit
+        # / invalid HLS opt errors
         print(f"ERROR: {e}")
         return 3
     except NotImplementedError as e:
@@ -234,8 +261,9 @@ is latched ONE-HOT (one bit per segment).  The only hard errors are syntax error
         return 0
     if a.backend == "rtl":
         ok, mism, bt, rt, log = simulate(a.outdir)
+        rep = None
     elif a.backend == "hls":
-        ok, mism, rt, log = hls_run.run(a.outdir, a.hls_run)
+        ok, mism, rt, log, rep = hls_run.run(a.outdir, a.hls_run)
         bt = None
     if ok is None:
         print("SIM SKIPPED:", log)
@@ -248,6 +276,18 @@ is latched ONE-HOT (one bit per segment).  The only hard errors are syntax error
     if not ok:
         print(log[-3000:])
         return 1
+    if rep is not None:
+        print(hls_report.summary(rep))
+    if a.vivado_run is not None and a.backend == "rtl":
+        v_passed, v_elapsed, v_log, v_stats = vivado_run.run(a.outdir, a.vivado_run)
+        if v_passed is None:
+            print("VIVADO SKIPPED:", v_log)
+        elif not v_passed:
+            print(v_log[-3000:])
+            return 1
+        else:
+            print(f"vivado ran in {v_elapsed:.1f}s")
+            print(vivado_run.summary(v_stats))
     return 0
 
 
