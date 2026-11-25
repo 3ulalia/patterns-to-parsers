@@ -6,6 +6,8 @@ Phase 1: hls_ref (evaluating hls_tables() only) must agree with golden on every 
 must be well-formed, and the emitted header must be valid C++.
 Phase 2: generate(backend="hls") writes a complete project, the CLI and runner plumbing work without
 Vitis (using a fake vitis-run), and csim agrees with the vectors (marked `hls`, needs vitis-run).
+Phase 3: hls_report finds and parses csynth reports (fixture copied from a real 2023.2 run), the runner
+and CLI surface them, and csynth on the example meets II=1 and the clock target (marked `hls`).
 """
 
 import glob
@@ -17,7 +19,17 @@ import subprocess
 
 import pytest
 
-from ptp import design, emit_hls, golden, hls_ref, hls_run, pir, run, vectors
+from ptp import (
+    design,
+    emit_hls,
+    golden,
+    hls_ref,
+    hls_report,
+    hls_run,
+    pir,
+    run,
+    vectors,
+)
 from ptp.tests.test_ptp import ALL, DATA, IDS, REAL
 
 SUPPORTED = ALL + [
@@ -285,8 +297,8 @@ def test_run_tcl(tmp_path, or_encode):
         char_per_col=char_per_col,
         or_encode=or_encode,
         backend="hls",
-        hls_part="xcvu9p-flga2104-2-i",
-        hls_clock=2.5,
+        part="xcvu9p-flga2104-2-i",
+        clock=2.5,
     )
     script = (tmp_path / "run_hls.tcl").read_text()
     assert _braces_balanced(script)
@@ -432,7 +444,7 @@ def _csim(outdir, hex_path, json_path, data_width, char_per_col, or_encode=False
     "hex_path,json_path,data_width,char_per_col", CSIM_CASES, ids=CSIM_IDS
 )
 def test_csim(tmp_path, hex_path, json_path, data_width, char_per_col):
-    passed, mismatches, _elapsed, log = _csim(
+    passed, mismatches, _elapsed, log, _report = _csim(
         tmp_path, hex_path, json_path, data_width, char_per_col
     )
     assert passed and mismatches == 0, log[-3000:]
@@ -441,7 +453,7 @@ def test_csim(tmp_path, hex_path, json_path, data_width, char_per_col):
 @pytest.mark.hls
 @pytest.mark.skipif(not HAVE_VITIS, reason="vitis-run missing")
 def test_csim_or_encode(tmp_path):
-    passed, mismatches, _elapsed, log = _csim(
+    passed, mismatches, _elapsed, log, _report = _csim(
         tmp_path, EXAMPLE_HEX, EXAMPLE_JSON, None, None, or_encode=True
     )
     assert passed and mismatches == 0, log[-3000:]
@@ -456,5 +468,279 @@ def test_csim_detects_bug(tmp_path):
     correct = "out = GROUP_IDS[group_number];"
     assert correct in source
     kernel.write_text(source.replace(correct, "out = GROUP_IDS[group_number] + 1;"))
-    passed, mismatches, _elapsed, _log = hls_run.run(str(tmp_path), "csim")
+    passed, mismatches, _elapsed, _log, _report = hls_run.run(str(tmp_path), "csim")
     assert not passed and mismatches > 0
+
+
+# ----- Phase 3: synthesis reports
+
+REPORT_FIXTURE = os.path.join(DATA, "hls", "parser_top_csynth.xml")
+CLASSIC_REPORT_DIR = os.path.join("hls_proj", "sol", "syn", "report")
+COMPONENT_REPORT_DIR = os.path.join("parser_top", "hls", "syn", "report")
+
+
+def _place_report(outdir, report_dir, name="parser_top_csynth.xml"):
+    directory = os.path.join(str(outdir), report_dir)
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, name)
+    shutil.copy(REPORT_FIXTURE, path)
+    return path
+
+
+def test_parse_report():
+    stats = hls_report.parse_report(REPORT_FIXTURE)
+    assert stats["version"] == "2023.2"
+    assert stats["part"] == "xcu280-fsvh2892-2L-e"
+    assert stats["top"] == "parser_top"
+    assert stats["target_clock"] == 10.0
+    assert stats["estimated_clock"] == 7.162
+    assert stats["interval"] == 1
+    assert (stats["latency_min"], stats["latency_max"]) == (3, 3)
+    assert stats["pipeline_depth"] == 4
+    assert stats["resources"] == {
+        "LUT": 7064,
+        "FF": 270,
+        "BRAM_18K": 0,
+        "URAM": 0,
+        "DSP": 0,
+    }
+    assert stats["available"]["LUT"] == 1303680
+    assert stats["protocols"]["parser_top"] == {"ap_ctrl_none"}
+    assert stats["protocols"]["out_r"] == {"axis"}
+
+
+def test_parse_report_missing_values(tmp_path):
+    path = tmp_path / "csynth.xml"
+    path.write_text(
+        "<profile><PerformanceEstimates><SummaryOfOverallLatency>"
+        "<Best-caseLatency>undef</Best-caseLatency><Worst-caseLatency>?</Worst-caseLatency>"
+        "<Interval-max>2</Interval-max>"
+        "</SummaryOfOverallLatency></PerformanceEstimates></profile>"
+    )
+    stats = hls_report.parse_report(str(path))
+    assert stats["latency_min"] is None
+    assert stats["latency_max"] is None
+    # no PipelineInitiationInterval: falls back to Interval-max
+    assert stats["interval"] == 2
+    assert stats["estimated_clock"] is None
+    assert stats["resources"]["LUT"] is None
+    assert stats["protocols"] == {}
+    hls_report.summary(stats)
+
+
+@pytest.mark.parametrize(
+    "report_dir",
+    [CLASSIC_REPORT_DIR, COMPONENT_REPORT_DIR],
+    ids=["classic", "component"],
+)
+def test_find_report_layouts(tmp_path, report_dir):
+    path = _place_report(tmp_path, report_dir)
+    # the per-module report of a sub-function must not be picked up
+    _place_report(tmp_path, report_dir, "compare_csynth.xml")
+    assert hls_report.find_report(str(tmp_path)) == path
+
+
+def test_find_report_fallback_and_newest(tmp_path):
+    fallback = _place_report(tmp_path, CLASSIC_REPORT_DIR, "csynth.xml")
+    assert hls_report.find_report(str(tmp_path)) == fallback
+    older = _place_report(tmp_path, CLASSIC_REPORT_DIR)
+    newer = _place_report(tmp_path, COMPONENT_REPORT_DIR)
+    os.utime(older, (1, 1))
+    assert hls_report.find_report(str(tmp_path)) == newer
+
+
+def test_report_none_without_synthesis(tmp_path):
+    assert hls_report.find_report(str(tmp_path)) is None
+    assert hls_report.report(str(tmp_path)) is None
+
+
+def test_summary():
+    line = hls_report.summary(hls_report.parse_report(REPORT_FIXTURE))
+    assert line.startswith("SYNTH II=1 latency=3-3 clock=7.162/10.0ns LUT=7064 FF=270")
+    assert line.endswith("interfaces=ap_ctrl_none,axis")
+
+
+def _fake_vitis_synth(tmp_path, monkeypatch):
+    """Fake vitis-run that passes and, past csim, leaves the fixture report behind."""
+    script = tmp_path / "fake-vitis-run"
+    report_dir = os.path.join(".", CLASSIC_REPORT_DIR)
+    script.write_text(
+        "#!/bin/sh\n"
+        'if [ "$PTP_STEP" != csim ]; then\n'
+        f"  mkdir -p {report_dir}\n"
+        f"  cp {REPORT_FIXTURE} {report_dir}/\n"
+        "fi\n"
+        "echo PASS\n"
+    )
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setattr(hls_run, "VITIS_RUN", str(script))
+
+
+@pytest.mark.parametrize(
+    "step,has_report",
+    [("csim", False), ("synth", True), ("cosim", True)],
+)
+def test_run_returns_report(tmp_path, monkeypatch, step, has_report):
+    _fake_vitis_synth(tmp_path, monkeypatch)
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    passed, _mismatches, _elapsed, _log, report = hls_run.run(str(outdir), step)
+    assert passed
+    assert (report is not None) == has_report
+    if has_report:
+        assert report["interval"] == 1
+
+
+def test_cli_hls_synth_summary(tmp_path, monkeypatch, capsys):
+    _fake_vitis_synth(tmp_path, monkeypatch)
+    assert _cli(tmp_path, "--sim", "--hls-run", "synth") == 0
+    assert "SYNTH II=1 " in capsys.readouterr().out
+
+
+def test_cli_hls_csim_no_summary(tmp_path, monkeypatch, capsys):
+    _fake_vitis_synth(tmp_path, monkeypatch)
+    assert _cli(tmp_path, "--sim") == 0
+    assert "SYNTH" not in capsys.readouterr().out
+
+
+@pytest.mark.hls
+@pytest.mark.skipif(not HAVE_VITIS, reason="vitis-run missing")
+def test_csynth(tmp_path):
+    clock = 4.0
+    run.generate(
+        EXAMPLE_HEX,
+        EXAMPLE_JSON,
+        str(tmp_path),
+        packets=300,
+        backend="hls",
+        clock=clock,
+    )
+    passed, mismatches, _elapsed, log, report = hls_run.run(str(tmp_path), "synth")
+    assert passed and mismatches == 0, log[-3000:]
+    assert report is not None, "no csynth report found"
+    assert report["target_clock"] == clock
+    assert report["interval"] == 1
+    assert report["estimated_clock"] <= clock
+    assert report["protocols"]["parser_top"] == {"ap_ctrl_none"}
+    stream_protocols = [
+        protocols
+        for port_object, protocols in report["protocols"].items()
+        if port_object != "parser_top"
+    ]
+    assert stream_protocols
+    assert all(protocols == {"axis"} for protocols in stream_protocols)
+    assert report["resources"]["LUT"] > 0
+
+
+# ----- Phase 3: directives (--hls-opts)
+
+ALL_OPTIONS = "ii=2,pipeline_style=flp,latency=3,inline=off,balance=off,reset=state,uncertainty=0.5"
+
+
+def test_parse_options():
+    assert hls_run.parse_options("") == {}
+    assert hls_run.parse_options(ALL_OPTIONS) == {
+        "ii": 2,
+        "pipeline_style": "flp",
+        "latency": 3,
+        "inline": "off",
+        "balance": "off",
+        "reset": "state",
+        "uncertainty": 0.5,
+    }
+    assert hls_run.parse_options(" ii=1 , ,balance=on") == {"ii": 1, "balance": "on"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ii=0",
+        "ii=-1",
+        "latency=x",
+        "ii",
+        "unknown=1",
+        "pipeline_style=fast",
+        "inline=on",
+        "balance=maybe",
+        "reset=some",
+        "uncertainty=a",
+    ],
+)
+def test_parse_options_rejects(text):
+    with pytest.raises(ValueError):
+        hls_run.parse_options(text)
+
+
+def test_directives_empty():
+    assert hls_run.directives({}) == ([], [])
+
+
+def test_directives_tcl_and_cfg_agree():
+    tcl_lines, cfg_lines = hls_run.directives(hls_run.parse_options(ALL_OPTIONS))
+    assert len(tcl_lines) == len(cfg_lines)
+    assert tcl_lines[0] == "set_directive_pipeline -II 2 -style flp parser_top"
+    assert cfg_lines[0] == "syn.directive.pipeline=parser_top II=2 style=flp"
+    assert "set_directive_latency -max 3 parser_top" in tcl_lines
+    assert "syn.directive.latency=parser_top max=3" in cfg_lines
+    for function in hls_run.STAGE_FUNCTIONS:
+        assert f"set_directive_inline -off {function}" in tcl_lines
+        assert f"syn.directive.inline={function} off" in cfg_lines
+    assert "set_directive_expression_balance -off parser_top" in tcl_lines
+    assert "syn.directive.expression_balance=parser_top off" in cfg_lines
+    assert "config_rtl -reset state" in tcl_lines
+    assert "syn.rtl.reset=state" in cfg_lines
+    assert "set_clock_uncertainty 0.5" in tcl_lines
+    assert "clock_uncertainty=0.5" in cfg_lines
+
+
+def test_directives_balance_on():
+    tcl_lines, cfg_lines = hls_run.directives({"balance": "on"})
+    assert tcl_lines == ["set_directive_expression_balance parser_top"]
+    assert cfg_lines == ["syn.directive.expression_balance=parser_top"]
+
+
+def _cfg_lines(path):
+    return path.read_text().splitlines()
+
+
+def test_project_directives(tmp_path):
+    run.generate(
+        EXAMPLE_HEX,
+        EXAMPLE_JSON,
+        str(tmp_path),
+        packets=50,
+        backend="hls",
+        hls_options="ii=2,reset=none",
+    )
+    script = (tmp_path / "run_hls.tcl").read_text()
+    assert "source directives.tcl" in script
+    # directives must follow create_clock (set_clock_uncertainty needs the clock)
+    assert script.index("create_clock") < script.index("source directives.tcl")
+    assert (tmp_path / "directives.tcl").read_text().splitlines() == [
+        "set_directive_pipeline -II 2 parser_top",
+        "config_rtl -reset none",
+    ]
+    cfg = _cfg_lines(tmp_path / "hls_config.cfg")
+    assert cfg[-2:] == ["syn.directive.pipeline=parser_top II=2", "syn.rtl.reset=none"]
+    assert all(line == line.lstrip() for line in cfg)
+
+
+def test_project_no_directives(tmp_path):
+    run.generate(EXAMPLE_HEX, EXAMPLE_JSON, str(tmp_path), packets=50, backend="hls")
+    assert (tmp_path / "directives.tcl").read_text() == ""
+    assert not any(
+        line.startswith("syn.directive.")
+        for line in _cfg_lines(tmp_path / "hls_config.cfg")
+    )
+
+
+def test_cli_hls_opts(tmp_path):
+    assert _cli(tmp_path, "--hls-opts", "latency=4") == 0
+    directives_tcl = (tmp_path / "out" / "directives.tcl").read_text()
+    assert directives_tcl == "set_directive_latency -max 4 parser_top\n"
+
+
+def test_cli_hls_opts_invalid_writes_nothing(tmp_path, capsys):
+    assert _cli(tmp_path, "--hls-opts", "ii=0") == 3
+    assert "ERROR: ii must be a positive integer" in capsys.readouterr().out
+    assert not (tmp_path / "out" / "ptp_design.h").exists()
