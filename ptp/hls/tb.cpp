@@ -5,8 +5,8 @@
 #include <iostream>
 #include <string>
 
-void parser_top(hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &in,
-                hls::stream<ap_uint<ID_WIDTH>> &out);
+void parser_top(hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &flits_in,
+                hls::stream<ap_uint<ID_WIDTH>> &ids_out);
 int main() {
   hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> inStream;
   hls::stream<ap_uint<ID_WIDTH>> outStream;

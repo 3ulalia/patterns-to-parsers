@@ -1,0 +1,12 @@
+build/
+_x*/
+.Xil/
+.ipcache/
+.run/
+*.log
+*.jou
+*.str
+*.ltx
+*.info
+*.link_summary
+*.xclbin

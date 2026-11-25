@@ -4,10 +4,10 @@
 #include <hls_stream.h>
 
 // run on a per-flit basis.
-void parser_top(hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &in,
-                hls::stream<ap_uint<ID_WIDTH>> &out) {
-#pragma HLS INTERFACE mode = axis port = in
-#pragma HLS INTERFACE mode = axis port = out
+void parser_top(hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &flits_in,
+                hls::stream<ap_uint<ID_WIDTH>> &ids_out) {
+#pragma HLS INTERFACE mode = axis port = flits_in
+#pragma HLS INTERFACE mode = axis port = ids_out
 #pragma HLS INTERFACE mode = ap_ctrl_none port = return
 #pragma HLS PIPELINE II = 1
 
@@ -17,7 +17,7 @@ void parser_top(hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &in,
   static int flit_index = 0;
   static ap_uint<PID_W> pseudo_id = 0;
 
-  flit = in.read();
+  flit = flits_in.read();
   bool last = flit.last;
 
   ap_uint<CMP_W> comparator_bits = compare(flit.data);
@@ -28,7 +28,7 @@ void parser_top(hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &in,
     ap_uint<OUT_W> matched_group = winning_group(matched_rows);
     ap_uint<ID_WIDTH> group_id = group_to_id(matched_group);
 
-    out.write(group_id);
+    ids_out.write(group_id);
     pseudo_id = 0;
   } else {
     pseudo_id = captured;
